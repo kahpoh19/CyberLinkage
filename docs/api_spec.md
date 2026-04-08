@@ -1,4 +1,4 @@
-# 📡 API 接口文档 —— 知路 ZhiPath
+# 📡 API 接口文档 —— CyberLinkage
 
 Base URL: `http://localhost:8000/api`
 

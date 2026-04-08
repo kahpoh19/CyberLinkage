@@ -1,4 +1,4 @@
-"""知路 ZhiPath —— FastAPI 应用入口"""
+"""CyberLinkage —— FastAPI 应用入口"""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +10,7 @@ from routers import auth, diagnosis, graph, path, report
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="知路 ZhiPath API",
+    title="CyberLinkage API",
     description="基于知识图谱的个性化学习伴侣",
     version="0.1.0",
 )
@@ -35,7 +35,7 @@ app.include_router(report.router)
 @app.get("/")
 def root():
     return {
-        "name": "知路 ZhiPath",
+        "name": "CyberLinkage",
         "version": "0.1.0",
         "description": "基于知识图谱的个性化学习伴侣",
     }

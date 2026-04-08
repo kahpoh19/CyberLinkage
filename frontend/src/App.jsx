@@ -42,7 +42,7 @@ export default function App() {
       >
         <div style={{ padding: '16px', textAlign: 'center' }}>
           <Title level={4} style={{ margin: 0, color: '#1677ff' }}>
-            🧠 知路
+            🧠 CyberLinkage
           </Title>
         </div>
         <Menu

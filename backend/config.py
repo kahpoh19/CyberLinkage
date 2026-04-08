@@ -5,15 +5,15 @@ import os
 
 class Settings:
     # 数据库
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./zhipath.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./cyberlinkage.db")
 
     # Neo4j 图数据库
     NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
     NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
-    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "zhipath2026")
+    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "cyberlinkage2026")
 
     # JWT 认证
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "zhipath-dev-secret-key")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "cyberlinkage-dev-secret-key")
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24小时
 

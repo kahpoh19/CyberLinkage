@@ -102,7 +102,7 @@ class SocraticTutor:
         mastery: Dict[str, float],
         topic: Optional[str],
     ) -> str:
-        base = SOCRATIC_PROMPT if SOCRATIC_PROMPT else "你是知路助教，一个C语言学习辅导AI。"
+        base = SOCRATIC_PROMPT if SOCRATIC_PROMPT else "你是CyberLinkage助教，一个C语言学习辅导AI。"
 
         mode_instruction = ""
         if mode == "socratic":

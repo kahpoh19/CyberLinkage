@@ -2,22 +2,22 @@ import { create } from 'zustand'
 
 const useUserStore = create((set, get) => ({
   user: null,
-  token: localStorage.getItem('zhipath_token') || null,
+  token: localStorage.getItem('cyberlinkage_token') || null,
 
   setUser: (user) => set({ user }),
 
   setToken: (token) => {
-    localStorage.setItem('zhipath_token', token)
+    localStorage.setItem('cyberlinkage_token', token)
     set({ token })
   },
 
   login: (user, token) => {
-    localStorage.setItem('zhipath_token', token)
+    localStorage.setItem('cyberlinkage_token', token)
     set({ user, token })
   },
 
   logout: () => {
-    localStorage.removeItem('zhipath_token')
+    localStorage.removeItem('cyberlinkage_token')
     set({ user: null, token: null })
   },
 

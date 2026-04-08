@@ -4,7 +4,7 @@ const api = axios.create({ baseURL: '/api' })
 
 // 请求拦截器：自动附带 JWT
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('zhipath_token')
+  const token = localStorage.getItem('cyberlinkage_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }

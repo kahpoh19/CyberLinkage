@@ -91,7 +91,7 @@ def main():
     )
     parser.add_argument("--uri", default="bolt://localhost:7687", help="Neo4j URI")
     parser.add_argument("--user", default="neo4j", help="Neo4j 用户名")
-    parser.add_argument("--password", default="zhipath2026", help="Neo4j 密码")
+    parser.add_argument("--password", default="cyberlinkage2026", help="Neo4j 密码")
     parser.add_argument("--all", action="store_true", help="导入所有课程")
 
     args = parser.parse_args()

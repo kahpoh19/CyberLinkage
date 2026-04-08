@@ -10,7 +10,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([
     {
       role: 'ai',
-      content: '你好！我是知路助教 🧠\n\n我可以帮你解答 C 语言学习中遇到的问题。默认使用「苏格拉底式引导」—— 我会通过提问帮你自己发现答案，而不是直接告诉你。\n\n如果你想要直接解释，可以关闭引导模式。\n\n有什么想问的？',
+      content: '你好！我是CyberLinkage助教 🧠\n\n我可以帮你解答 C 语言学习中遇到的问题。默认使用「苏格拉底式引导」—— 我会通过提问帮你自己发现答案，而不是直接告诉你。\n\n如果你想要直接解释，可以关闭引导模式。\n\n有什么想问的？',
       timestamp: new Date().toLocaleTimeString(),
     },
   ])

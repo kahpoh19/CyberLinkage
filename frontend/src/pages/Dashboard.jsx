@@ -58,7 +58,7 @@ export default function Dashboard() {
   if (!isAuthenticated()) {
     return (
       <div style={{ textAlign: 'center', marginTop: 100 }}>
-        <Title level={2}>🧠 知路 ZhiPath</Title>
+        <Title level={2}>🧠 CyberLinkage</Title>
         <Paragraph style={{ fontSize: 16, color: '#666' }}>
           基于知识图谱的个性化学习伴侣
         </Paragraph>
