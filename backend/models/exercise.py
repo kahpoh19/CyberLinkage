@@ -1,0 +1,17 @@
+"""练习题模型"""
+
+from sqlalchemy import Column, Integer, String, Text, JSON
+
+from database import Base
+
+
+class Exercise(Base):
+    __tablename__ = "exercises"
+
+    id = Column(Integer, primary_key=True, index=True)
+    knowledge_point_id = Column(String(50), nullable=False, index=True)
+    question_text = Column(Text, nullable=False)
+    options = Column(JSON, nullable=False)  # {"A": "...", "B": "...", "C": "...", "D": "..."}
+    correct_answer = Column(String(1), nullable=False)  # "A", "B", "C", "D"
+    difficulty = Column(Integer, default=3)  # 1-5
+    explanation = Column(Text, nullable=True)  # 答案解析
