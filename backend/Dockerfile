@@ -2,10 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY backend/ .
+COPY knowledge/data /app/knowledge/data
+
+ENV KNOWLEDGE_DATA_DIR=/app/knowledge/data
 
 EXPOSE 8000
 
