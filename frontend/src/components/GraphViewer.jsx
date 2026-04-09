@@ -1,18 +1,17 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 
 /**
- * 知识图谱 — 固定分层布局（按 chapter 分行，同 chapter 节点水平排列）
- *
- * Props:
- *   nodes: [{ id, name, symbolSize, itemStyle, category, chapter, difficulty, mastery, ... }]
- *   edges: [{ source, target }]
- *   onNodeClick: (nodeData) => void
+ * 知识图谱 — 径向树状布局
+ * 中心: 课程名 → 第一圈: 章节 → 第二圈: 知识点
+ * 鼠标在整个容器内都能缩放/平移
  */
 export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
-  // 按 chapter 分组，计算固定坐标
-  const positionedNodes = useMemo(() => {
-    if (!nodes.length) return []
+  const chartRef = useRef(null)
+
+  // 构建树状数据：中心节点 → 章节 → 知识点
+  const { treeNodes, treeEdges } = useMemo(() => {
+    if (!nodes.length) return { treeNodes: [], treeEdges: [] }
 
     // 按 chapter 分组
     const groups = {}
@@ -22,37 +21,119 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
       groups[ch].push(n)
     })
 
-    const chapters = Object.keys(groups)
-      .map(Number)
-      .sort((a, b) => a - b)
+    const chapters = Object.keys(groups).map(Number).sort((a, b) => a - b)
+    const allNodes = []
+    const allEdges = []
 
-    const ySpacing = 120 // 行间距
-    const result = []
+    // 中心节点
+    const centerNode = {
+      id: '__root__',
+      name: 'C语言程序设计',
+      symbolSize: 70,
+      itemStyle: { color: '#1890ff', shadowBlur: 10, shadowColor: 'rgba(24,144,255,0.4)' },
+      label: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
+      x: 0,
+      y: 0,
+      fixed: true,
+      _isRoot: true,
+    }
+    allNodes.push(centerNode)
 
-    chapters.forEach((ch, rowIndex) => {
-      const row = groups[ch]
-      const xSpacing = 160 // 列间距
-      const totalWidth = (row.length - 1) * xSpacing
-      const xOffset = -totalWidth / 2 // 居中
+    const chapterCount = chapters.length
+    const chapterRadius = 280 // 章节圈半径
+    const leafRadius = 200   // 知识点离章节的距离
 
-      row.forEach((node, colIndex) => {
-        result.push({
-          ...node,
-          x: xOffset + colIndex * xSpacing,
-          y: rowIndex * ySpacing,
+    chapters.forEach((ch, i) => {
+      // 章节节点均匀分布在圆周上
+      const angle = (2 * Math.PI * i) / chapterCount - Math.PI / 2
+      const cx = Math.cos(angle) * chapterRadius
+      const cy = Math.sin(angle) * chapterRadius
+
+      const chapterId = `__ch_${ch}__`
+      const chapterNode = {
+        id: chapterId,
+        name: `第${ch}章`,
+        symbolSize: 45,
+        itemStyle: { color: '#40a9ff', borderColor: '#1890ff', borderWidth: 2 },
+        label: { fontSize: 12, fontWeight: 'bold', color: '#333' },
+        x: cx,
+        y: cy,
+        fixed: true,
+        _isChapter: true,
+        chapter: ch,
+      }
+      allNodes.push(chapterNode)
+      allEdges.push({ source: '__root__', target: chapterId })
+
+      // 该章节下的知识点
+      const leaves = groups[ch]
+      const leafCount = leaves.length
+      // 知识点在章节节点周围扇形分布
+      const spreadAngle = Math.min(Math.PI * 0.6, (leafCount - 1) * 0.35 + 0.3)
+      const startAngle = angle - spreadAngle / 2
+
+      leaves.forEach((n, j) => {
+        const leafAngle = leafCount === 1
+          ? angle
+          : startAngle + (spreadAngle * j) / (leafCount - 1)
+        const lx = cx + Math.cos(leafAngle) * leafRadius
+        const ly = cy + Math.sin(leafAngle) * leafRadius
+
+        allNodes.push({
+          ...n,
+          name: n.name || n.id,
+          x: lx,
+          y: ly,
           fixed: true,
         })
+        allEdges.push({ source: chapterId, target: n.id })
       })
     })
 
-    return result
-  }, [nodes])
+    // 保留原始知识点之间的前置关系边
+    const nodeIds = new Set(allNodes.map((n) => n.id))
+    edges.forEach((e) => {
+      if (nodeIds.has(e.source) && nodeIds.has(e.target)) {
+        allEdges.push({
+          source: e.source,
+          target: e.target,
+          lineStyle: { color: '#d9d9d9', type: 'dashed', width: 1 },
+        })
+      }
+    })
+
+    return { treeNodes: allNodes, treeEdges: allEdges }
+  }, [nodes, edges])
+
+  // 让整个容器都能响应滚轮缩放
+  useEffect(() => {
+    const chart = chartRef.current?.getEchartsInstance()
+    if (!chart) return
+
+    const dom = chart.getDom()
+    const handleWheel = (e) => {
+      e.preventDefault()
+      const zoom = chart.getOption().series[0]
+      // 触发 echarts 的 dataZoom 通过 dispatchAction
+      chart.dispatchAction({
+        type: 'graphRoam',
+        seriesIndex: 0,
+        zoom: e.deltaY < 0 ? 1.15 : 0.87,
+      })
+    }
+
+    dom.addEventListener('wheel', handleWheel, { passive: false })
+    return () => dom.removeEventListener('wheel', handleWheel)
+  }, [treeNodes])
 
   const option = {
     tooltip: {
       formatter: (params) => {
         if (params.dataType === 'node') {
           const d = params.data
+          if (d._isRoot || d._isChapter) {
+            return `<b>${d.name}</b>`
+          }
           const mastery =
             d.mastery !== null && d.mastery !== undefined
               ? `${(d.mastery * 100).toFixed(1)}%`
@@ -71,32 +152,31 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
     series: [
       {
         type: 'graph',
-        layout: 'none', // 使用固定坐标，不用力导向
-        roam: true, // 允许缩放和平移查看，但节点不可拖
+        layout: 'none',
+        roam: true,
         draggable: false,
         label: {
           show: true,
           position: 'bottom',
-          fontSize: 11,
-          color: '#333',
+          fontSize: 10,
+          color: '#555',
           formatter: (params) => {
-            const name = params.data.name || ''
-            // 名字太长换行
-            return name.length > 6 ? name.slice(0, 6) + '\n' + name.slice(6) : name
+            const d = params.data
+            if (d._isRoot) return d.name
+            if (d._isChapter) return d.name
+            const name = d.name || ''
+            return name.length > 5 ? name.slice(0, 5) + '\n' + name.slice(5) : name
           },
         },
         lineStyle: {
-          color: '#bbb',
-          curveness: 0.2,
+          color: '#91d5ff',
+          curveness: 0.15,
           width: 1.5,
         },
         edgeSymbol: ['none', 'arrow'],
-        edgeSymbolSize: [0, 8],
-        data: positionedNodes.map((n) => ({
-          ...n,
-          name: n.name || n.id,
-        })),
-        links: edges,
+        edgeSymbolSize: [0, 6],
+        data: treeNodes,
+        links: treeEdges,
         emphasis: {
           focus: 'adjacency',
           lineStyle: { width: 3 },
@@ -107,13 +187,14 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
   }
 
   const handleClick = (params) => {
-    if (params.dataType === 'node' && onNodeClick) {
+    if (params.dataType === 'node' && onNodeClick && !params.data._isRoot && !params.data._isChapter) {
       onNodeClick(params.data)
     }
   }
 
   return (
     <ReactECharts
+      ref={chartRef}
       option={option}
       style={{ width: '100%', height: '100%' }}
       onEvents={{ click: handleClick }}
