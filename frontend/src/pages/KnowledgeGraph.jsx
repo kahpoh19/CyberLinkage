@@ -54,6 +54,7 @@ export default function KnowledgeGraph() {
     id: n.id,
     name: n.name,
     category: n.category,
+    chapter: n.chapter || 0,
     mastery: n.mastery,
     difficulty: n.difficulty,
     description: n.description,
