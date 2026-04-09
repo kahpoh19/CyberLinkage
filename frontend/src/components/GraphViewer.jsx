@@ -2,14 +2,19 @@ import React, { useMemo, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 
 /**
- * 知识图谱 — 径向树状布局（大间距版）
- * 中心: 课程名 → 第一圈: 章节 → 第二圈: 知识点
+ * 知识图谱 — 每章独立子树，跨章节关联用彩色虚线
  */
 
 const CHAPTER_COLORS = [
   '#1890ff', '#13c2c2', '#52c41a', '#faad14', '#f5222d',
   '#722ed1', '#eb2f96', '#fa8c16', '#2f54eb', '#a0d911',
   '#36cfc9', '#ff7a45', '#9254de',
+]
+
+// 跨章节连线颜色（区分于章节色）
+const CROSS_LINK_COLORS = [
+  '#ff85c0', '#b37feb', '#5cdbd3', '#ffc069', '#ff9c6e',
+  '#95de64', '#69c0ff', '#ffd666', '#ff7875', '#87e8de',
 ]
 
 function getMasteryColor(mastery) {
@@ -25,6 +30,7 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
   const { treeNodes, treeEdges } = useMemo(() => {
     if (!nodes.length) return { treeNodes: [], treeEdges: [] }
 
+    // 按 chapter 分组
     const groups = {}
     nodes.forEach((n) => {
       const ch = n.chapter || 0
@@ -36,88 +42,66 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
     const allNodes = []
     const allEdges = []
 
-    // 中心节点
-    allNodes.push({
-      id: '__root__',
-      name: 'C语言程序设计',
-      symbolSize: 80,
-      itemStyle: {
-        color: '#1890ff',
-        shadowBlur: 15,
-        shadowColor: 'rgba(24,144,255,0.5)',
-        borderColor: '#fff',
-        borderWidth: 3,
-      },
-      label: { fontSize: 13, fontWeight: 'bold', color: '#fff', position: 'inside' },
-      x: 0,
-      y: 0,
-      fixed: true,
-      _isRoot: true,
-    })
+    // 建立节点→章节的映射
+    const nodeChapterMap = {}
+    nodes.forEach((n) => { nodeChapterMap[n.id] = n.chapter || 0 })
 
     const chapterCount = chapters.length
-    const chapterRadius = 400         // 章节离中心的距离
-    const leafBaseRadius = 280        // 知识点离章节的基础距离
-    const minLeafGap = 80            // 知识点之间最小间距（像素）
+
+    // 每棵子树的布局参数
+    const treeSpacingX = 500    // 子树之间水平间距
+    const cols = 4              // 每行放几棵子树
+    const treeSpacingY = 600    // 子树行间距
+    const leafSpacing = 90      // 知识点之间间距
+    const leafDistance = 160     // 知识点离章节节点的径向距离
 
     chapters.forEach((ch, i) => {
-      const angle = (2 * Math.PI * i) / chapterCount - Math.PI / 2
-      const cx = Math.cos(angle) * chapterRadius
-      const cy = Math.sin(angle) * chapterRadius
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      // 子树中心位置
+      const treeCx = col * treeSpacingX
+      const treeCy = row * treeSpacingY
       const color = CHAPTER_COLORS[i % CHAPTER_COLORS.length]
 
       const chapterId = `__ch_${ch}__`
+
+      // 章节主节点
       allNodes.push({
         id: chapterId,
         name: `第${ch}章`,
-        symbolSize: 50,
+        symbolSize: 55,
         itemStyle: {
           color: color,
           borderColor: '#fff',
-          borderWidth: 2,
-          shadowBlur: 8,
-          shadowColor: color + '66',
+          borderWidth: 3,
+          shadowBlur: 10,
+          shadowColor: color + '55',
         },
-        label: { fontSize: 12, fontWeight: 'bold', color: '#fff', position: 'inside' },
-        x: cx,
-        y: cy,
+        label: { fontSize: 13, fontWeight: 'bold', color: '#fff', position: 'inside' },
+        x: treeCx,
+        y: treeCy,
         fixed: true,
         _isChapter: true,
         chapter: ch,
       })
-      allEdges.push({
-        source: '__root__',
-        target: chapterId,
-        lineStyle: { color: color, width: 2.5, opacity: 0.6 },
-      })
 
+      // 知识点围绕章节节点放射
       const leaves = groups[ch]
       const leafCount = leaves.length
 
-      // 根据节点数量动态计算需要的弧长，确保节点不重叠
-      // 在 leafBaseRadius 处，需要的弧长 = leafCount * minLeafGap
-      // 对应角度 = 弧长 / 半径
-      const neededAngle = (leafCount * minLeafGap) / leafBaseRadius
-      // 不超过该章节可用的扇区（留 10% 间隙）
-      const sectorAngle = (2 * Math.PI) / chapterCount * 0.9
-      const spreadAngle = Math.min(sectorAngle, Math.max(neededAngle, 0.3))
-
-      const startAngle = angle - spreadAngle / 2
-
+      // 均匀分布在整个圆周
       leaves.forEach((n, j) => {
-        const leafAngle = leafCount === 1
-          ? angle
-          : startAngle + (spreadAngle * j) / (leafCount - 1)
+        const angle = (2 * Math.PI * j) / leafCount - Math.PI / 2
 
-        // 三层交错半径：节点多时避免径向也挤
-        let radiusOffset = 0
-        if (leafCount > 2) {
-          radiusOffset = (j % 3) * 50  // 0, 50, 100 三层交错
+        // 多节点时交错距离防重叠
+        let rOffset = 0
+        if (leafCount > 3) {
+          rOffset = (j % 2) * 50
         }
-        const leafR = leafBaseRadius + radiusOffset
+        const r = leafDistance + rOffset
 
-        const lx = cx + Math.cos(leafAngle) * leafR
-        const ly = cy + Math.sin(leafAngle) * leafR
+        const lx = treeCx + Math.cos(angle) * r
+        const ly = treeCy + Math.sin(angle) * r
 
         const masteryColor = getMasteryColor(n.mastery)
 
@@ -134,22 +118,50 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
           y: ly,
           fixed: true,
         })
+
+        // 章节→知识点连线
         allEdges.push({
           source: chapterId,
           target: n.id,
-          lineStyle: { color: color, width: 1.5, opacity: 0.4 },
+          lineStyle: { color: color, width: 2, opacity: 0.5 },
         })
       })
     })
 
-    // 知识点前置关系（虚线）
+    // 跨章节知识点关联 — 彩色虚线
     const nodeIds = new Set(allNodes.map((n) => n.id))
+    let crossIndex = 0
     edges.forEach((e) => {
-      if (nodeIds.has(e.source) && nodeIds.has(e.target)) {
+      if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) return
+      const srcCh = nodeChapterMap[e.source]
+      const tgtCh = nodeChapterMap[e.target]
+
+      if (srcCh !== tgtCh) {
+        // 跨章节 — 彩色虚线
+        const crossColor = CROSS_LINK_COLORS[crossIndex % CROSS_LINK_COLORS.length]
+        crossIndex++
         allEdges.push({
           source: e.source,
           target: e.target,
-          lineStyle: { color: '#bbb', type: 'dashed', width: 1, opacity: 0.4 },
+          lineStyle: {
+            color: crossColor,
+            type: 'dashed',
+            width: 1.5,
+            opacity: 0.6,
+            curveness: 0.3,
+          },
+        })
+      } else {
+        // 同章节内的关联 — 细实线
+        const chIdx = chapters.indexOf(srcCh)
+        allEdges.push({
+          source: e.source,
+          target: e.target,
+          lineStyle: {
+            color: CHAPTER_COLORS[chIdx % CHAPTER_COLORS.length],
+            width: 1,
+            opacity: 0.3,
+          },
         })
       }
     })
@@ -185,8 +197,7 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
       formatter: (params) => {
         if (params.dataType === 'node') {
           const d = params.data
-          if (d._isRoot) return `<b style="font-size:14px">${d.name}</b>`
-          if (d._isChapter) return `<b>${d.name}</b>`
+          if (d._isChapter) return `<b style="font-size:14px">${d.name}</b>`
           const mastery =
             d.mastery !== null && d.mastery !== undefined
               ? `${(d.mastery * 100).toFixed(1)}%`
@@ -200,6 +211,12 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
             预计：${d.estimated_minutes || 30}分钟
           `
         }
+        if (params.dataType === 'edge') {
+          const d = params.data
+          if (d.lineStyle?.type === 'dashed') {
+            return `<i>跨章节关联</i><br/>${d.source} → ${d.target}`
+          }
+        }
         return ''
       },
     },
@@ -210,7 +227,7 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
         layout: 'none',
         roam: true,
         draggable: false,
-        zoom: 0.55,  // 初始缩小，让整个图都能看到
+        zoom: 0.45,
         label: {
           show: true,
           position: 'bottom',
@@ -219,13 +236,13 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
           distance: 5,
           formatter: (params) => {
             const d = params.data
-            if (d._isRoot || d._isChapter) return ''
+            if (d._isChapter) return ''
             const name = d.name || ''
             return name.length > 5 ? name.slice(0, 5) + '\n' + name.slice(5) : name
           },
         },
         lineStyle: {
-          curveness: 0.2,
+          curveness: 0.15,
           width: 1.5,
         },
         edgeSymbol: ['none', 'arrow'],
@@ -242,7 +259,7 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
   }
 
   const handleClick = (params) => {
-    if (params.dataType === 'node' && onNodeClick && !params.data._isRoot && !params.data._isChapter) {
+    if (params.dataType === 'node' && onNodeClick && !params.data._isChapter) {
       onNodeClick(params.data)
     }
   }
