@@ -226,7 +226,7 @@ export default function App() {
                 <Button type="text" icon={<LogoutOutlined />} onClick={() => { logout(); navigate('/') }} />
               </>
             ) : (
-              <Button type="primary" onClick={() => navigate('/')}>登录</Button>
+              <Button type="primary" onClick={() => useUserStore.getState().openAuthModal()}>登录</Button>
             )}
           </Space>
         </Header>

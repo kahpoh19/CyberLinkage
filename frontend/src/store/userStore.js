@@ -5,6 +5,9 @@ const useUserStore = create((set, get) => ({
   token: localStorage.getItem('cyberlinkage_token') || null,
   theme: localStorage.getItem('cyberlinkage_theme') || 'light',
   discoMode: false,
+  showAuthModal: false,          // ← add
+  openAuthModal: () => set({ showAuthModal: true }),   // ← add
+  closeAuthModal: () => set({ showAuthModal: false }),  // ← add
 
   setUser: (user) => set({ user }),
 

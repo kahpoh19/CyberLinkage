@@ -16,7 +16,7 @@ export default function Dashboard() {
   const { user, isAuthenticated, login: storeLogin, setUser } = useUserStore()
   const [summary, setSummary] = useState(null)
   const [progress, setProgress] = useState([])
-  const [showAuth, setShowAuth] = useState(false)
+  const { showAuthModal: showAuth, openAuthModal, closeAuthModal } = useUserStore()
   const [isRegister, setIsRegister] = useState(false)
   const [form] = Form.useForm()
 
