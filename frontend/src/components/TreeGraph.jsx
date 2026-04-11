@@ -1,76 +1,37 @@
 import React, { useMemo, useRef, useCallback } from 'react'
 import ReactECharts from 'echarts-for-react'
-
-function getMasteryColor(mastery) {
-  if (mastery == null) return '#d9d9d9'
-  if (mastery < 0.4) return '#ff4d4f'
-  if (mastery < 0.7) return '#faad14'
-  return '#52c41a'
-}
-
-// 把扁平的 nodes/edges 转成 ECharts tree 需要的嵌套结构
-// 以 chapter 分组，每章作为一个根节点
-function buildTreeData(graphData) {
-  if (!graphData) return []
-
-  const { nodes, edges } = graphData
-  const nodeMap = {}
-  nodes.forEach(n => { nodeMap[n.id] = { ...n } })
-
-  // 建立 parent → children 映射（边方向：prerequisite，from → to）
-  const childrenMap = {}
-  edges.forEach(e => {
-    if (!childrenMap[e.source]) childrenMap[e.source] = []
-    childrenMap[e.source].push(e.target)
-  })
-
-  // 找出没有入边的节点（根节点）
-  const hasParent = new Set(edges.map(e => e.target))
-  const roots = nodes.filter(n => !hasParent.has(n.id))
-
-  // 递归构建树节点
-  const visited = new Set()
-  function buildNode(nodeId, depth = 0) {
-    if (visited.has(nodeId)) return null
-    visited.add(nodeId)
-    const node = nodeMap[nodeId]
-    if (!node) return null
-
-    const children = (childrenMap[nodeId] || [])
-      .map(cid => buildNode(cid, depth + 1))
-      .filter(Boolean)
-
-    return {
-      name: node.name,
-      id: node.id,
-      value: node.mastery,
-      // 第2层及以下默认折叠
-      collapsed: depth >= 1,
-      itemStyle: { color: getMasteryColor(node.mastery) },
-      // 透传原始数据给 onNodeClick
-      _raw: node,
-      children: children.length ? children : undefined,
-    }
-  }
-
-  return roots.map(r => buildNode(r.id)).filter(Boolean)
-}
+import useUserStore from '../store/userStore'
+import { buildTreeData, getMasteryTokens } from '../utils/graphUtils'
 
 export default function TreeGraph({ graphData, onNodeClick }) {
   const chartRef = useRef(null)
+  const theme = useUserStore((s) => s.theme) // 'light' | 'dark'
+  const isDark = theme === 'dark'
 
-  const treeData = useMemo(() => buildTreeData(graphData), [graphData])
+  const treeData = useMemo(
+    () => buildTreeData(graphData, theme),
+    [graphData, theme]
+  )
 
   const option = useMemo(() => ({
+    backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
+      backgroundColor: isDark ? '#1f1f1f' : '#fff',
+      borderColor: isDark ? '#434343' : '#e8e8e8',
+      textStyle: { color: isDark ? '#e0e0e0' : '#333' },
       formatter: (params) => {
         const d = params.data
         if (!d._raw) return d.name
         const m = d._raw.mastery
+        const tokens = getMasteryTokens(m, theme)
         const mStr = m != null ? `${(m * 100).toFixed(1)}%` : '未测试'
-        return `<b>${d.name}</b><br/>掌握度：${mStr}<br/>难度：${'⭐'.repeat(d._raw.difficulty || 3)}`
-      }
+        return [
+          `<b style="color:${tokens.bg}">${d.name}</b>`,
+          `掌握度：<span style="color:${tokens.bg};font-weight:600">${mStr}</span>`,
+          `难度：${'⭐'.repeat(d._raw.difficulty || 3)}`,
+        ].join('<br/>')
+      },
     },
     series: [{
       type: 'tree',
@@ -81,33 +42,39 @@ export default function TreeGraph({ graphData, onNodeClick }) {
       top: '5%',
       bottom: '5%',
       symbol: 'circle',
-      symbolSize: 56,          // 加大，够放2-3个汉字
+      symbolSize: 56,
       expandAndCollapse: true,
       animationDuration: 300,
       animationDurationUpdate: 300,
+      // series 级别的 label 作为「默认」；节点级别的 label 会覆盖它
       label: {
-        position: 'inside',    // 在圆内
+        position: 'inside',
         fontSize: 11,
-        fontWeight: 500,
-        color: '#ffffff',
+        fontWeight: 600,
         overflow: 'truncate',
-        width: 50,             // 配合 symbolSize 56
+        width: 50,
+        // 颜色由各节点的 label.color 覆盖，这里给个保底值
+        color: '#ffffff',
       },
       leaves: {
         label: {
           position: 'inside',
           fontSize: 11,
-          fontWeight: 500,
-          color: '#ffffff',
+          fontWeight: 600,
           overflow: 'truncate',
           width: 50,
-        }
+          color: '#ffffff',
+        },
       },
-      lineStyle: { color: '#ccc', width: 1, curveness: 0.5 },
+      lineStyle: {
+        color: isDark ? '#555' : '#ccc',
+        width: 1,
+        curveness: 0.5,
+      },
       emphasis: { focus: 'descendant' },
       initialTreeDepth: 1,
-    }]
-  }), [treeData])
+    }],
+  }), [treeData, isDark, theme])
 
   const handleClick = useCallback((params) => {
     if (params.dataType === 'node' && params.data._raw) {
