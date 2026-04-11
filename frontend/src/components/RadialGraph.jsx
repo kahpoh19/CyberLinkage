@@ -41,8 +41,6 @@ export default function RadialGraph({ graphData, onNodeClick }) {
       right: '5%',
       top: '5%',
       bottom: '5%',
-      symbol: 'circle',
-      symbolSize: 52,
       expandAndCollapse: true,
       animationDuration: 300,
       animationDurationUpdate: 300,

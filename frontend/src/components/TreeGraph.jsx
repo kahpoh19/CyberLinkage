@@ -41,8 +41,6 @@ export default function TreeGraph({ graphData, onNodeClick }) {
       right: '20%',
       top: '5%',
       bottom: '5%',
-      symbol: 'circle',
-      symbolSize: 56,
       expandAndCollapse: true,
       animationDuration: 300,
       animationDurationUpdate: 300,

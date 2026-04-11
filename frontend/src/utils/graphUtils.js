@@ -84,11 +84,15 @@ export function buildTreeData(graphData, theme = 'light') {
       .map(cid => buildNode(cid, depth + 1))
       .filter(Boolean)
 
+    const isLeaf = children.length === 0
+
     return {
       name: node.name,
       id: node.id,
       value: node.mastery,
       collapsed: depth >= 1,
+      symbol: isLeaf ? 'rect' : 'circle',
+      symbolSize: isLeaf ? 40 : 48,
       itemStyle: {
         color: tokens.bg,
         borderColor: tokens.border,
@@ -103,6 +107,7 @@ export function buildTreeData(graphData, theme = 'light') {
         textShadowColor: 'rgba(0,0,0,0.5)',
         textShadowOffsetX: 0,
         textShadowOffsetY: 1,
+        width: 70,
       },
       _raw: node,
       children: children.length ? children : undefined,
