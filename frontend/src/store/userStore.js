@@ -33,8 +33,13 @@ const useUserStore = create((set, get) => ({
 
   activateDisco: () => {
     if (get().discoMode) return
-    set({ discoMode: true })
-    setTimeout(() => set({ discoMode: false }), 5000)
+    const timer = setTimeout(() => set({ discoMode: false, _discoTimer: null }), 10000)
+    set({ discoMode: true, _discoTimer: timer })
+  },
+
+  deactivateDisco: () => {
+    clearTimeout(get()._discoTimer)
+    set({ discoMode: false, _discoTimer: null })
   },
 }))
 

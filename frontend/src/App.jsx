@@ -84,10 +84,17 @@ export default function App() {
         style={{
           position: 'fixed', inset: 0,
           opacity: 0,
-          pointerEvents: 'none',
+          pointerEvents: discoMode ? 'auto' : 'none',
           zIndex: 9999,
           transition: 'background 0.12s ease, opacity 0.3s ease',
           mixBlendMode: 'screen',
+          cursor: discoMode ? 'pointer' : 'default',
+        }}
+        onClick={() => {
+          if (discoMode) {
+            // 直接调用 store 的 deactivate
+            useUserStore.getState().deactivateDisco()
+          }
         }}
       />
 
@@ -108,6 +115,28 @@ export default function App() {
         </div>
       )}
 
+      {/* Disco GIF —— 画面正中间，随 discoMode 出现/消失 */}
+      {discoMode && (
+        <div style = {{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9998,
+          pointerEvents: 'none',
+        }}>
+        <img
+        src="/disco.gif"  // 把你的 gif 放到 frontend/public/disco.gif
+        alt="disco"
+        style={{
+          width: 320,
+          borderRadius: 16,
+          opacity: 0.92,
+        }}
+        />
+        </div>
+      )}  
       <style>{`
         @keyframes discoSlide {
           0% { background-position: 0% 50%; }
