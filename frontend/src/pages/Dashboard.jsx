@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Col, Row, Statistic, Typography, Empty, Button, Modal, Form, Input, message } from 'antd'
+import { Card, Col, Row, Statistic, Typography, Empty, Button } from 'antd'
 import {
   BookOutlined,
   CheckCircleOutlined,
@@ -8,17 +8,14 @@ import {
 } from '@ant-design/icons'
 import RadarChart from '../components/RadarChart'
 import useUserStore from '../store/userStore'
-import { getReport, getProgress, login, register, getMe } from '../api'
+import { getReport, getProgress, getMe } from '../api'
 
 const { Title, Paragraph } = Typography
 
 export default function Dashboard() {
-  const { user, isAuthenticated, login: storeLogin, setUser } = useUserStore()
+  const { user, isAuthenticated, setUser, openAuthModal } = useUserStore()
   const [summary, setSummary] = useState(null)
   const [progress, setProgress] = useState([])
-  const { showAuthModal: showAuth, openAuthModal, closeAuthModal } = useUserStore()
-  const [isRegister, setIsRegister] = useState(false)
-  const [form] = Form.useForm()
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -41,20 +38,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleAuth = async (values) => {
-    try {
-      const fn = isRegister ? register : login
-      const res = await fn(values)
-      storeLogin(null, res.data.access_token)
-      const me = await getMe()
-      setUser(me.data)
-      setShowAuth(false)
-      message.success(isRegister ? '注册成功！' : '登录成功！')
-    } catch (e) {
-      message.error(e.response?.data?.detail || '操作失败')
-    }
-  }
-
   if (!isAuthenticated()) {
     return (
       <div style={{ textAlign: 'center', marginTop: 100 }}>
@@ -62,35 +45,9 @@ export default function Dashboard() {
         <Paragraph style={{ fontSize: 16, color: '#666' }}>
           基于知识图谱的个性化学习伴侣
         </Paragraph>
-        <Button type="primary" size="large" onClick={() => setShowAuth(true)}>
+        <Button type="primary" size="large" onClick={openAuthModal}>
           开始使用
         </Button>
-        <Modal
-          title={isRegister ? '注册' : '登录'}
-          open={showAuth}
-          onCancel={() => setShowAuth(false)}
-          footer={null}
-        >
-          <Form form={form} onFinish={handleAuth} layout="vertical">
-            <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            {isRegister && (
-              <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email' }]}>
-                <Input />
-              </Form.Item>
-            )}
-            <Form.Item name="password" label="密码" rules={[{ required: true, min: 6 }]}>
-              <Input.Password />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" block>
-              {isRegister ? '注册' : '登录'}
-            </Button>
-            <Button type="link" block onClick={() => setIsRegister(!isRegister)}>
-              {isRegister ? '已有账号？去登录' : '没有账号？去注册'}
-            </Button>
-          </Form>
-        </Modal>
       </div>
     )
   }

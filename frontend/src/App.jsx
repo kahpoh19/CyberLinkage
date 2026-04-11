@@ -1,6 +1,6 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip } from 'antd'
+import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, Input, message } from 'antd'
 import {
   DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
   NodeIndexOutlined, RobotOutlined, LogoutOutlined,
@@ -13,6 +13,7 @@ import KnowledgeGraph from './pages/KnowledgeGraph'
 import LearningPath from './pages/LearningPath'
 import Chat from './pages/Chat'
 import useUserStore from './store/userStore'
+import { login, register, getMe } from './api'
 
 const { Sider, Content, Header } = Layout
 const { Title } = Typography
@@ -30,16 +31,72 @@ const DISCO_COLORS = [
   '#00cfff', '#bf00ff', '#ff69b4', '#ff6600',
 ]
 
+// ── Auth Modal (lifted here so both header button and Dashboard can open it) ──
+function AuthModal() {
+  const { showAuthModal, closeAuthModal, login: storeLogin, setUser } = useUserStore()
+  const [isRegister, setIsRegister] = useState(false)
+  const [form] = Form.useForm()
+
+  const handleClose = () => {
+    form.resetFields()
+    setIsRegister(false)
+    closeAuthModal()
+  }
+
+  const handleAuth = async (values) => {
+    try {
+      const fn = isRegister ? register : login
+      const res = await fn(values)
+      storeLogin(null, res.data.access_token)
+      const me = await getMe()
+      setUser(me.data)
+      handleClose()
+      message.success(isRegister ? '注册成功！' : '登录成功！')
+    } catch (e) {
+      message.error(e.response?.data?.detail || '操作失败')
+    }
+  }
+
+  return (
+    <Modal
+      title={isRegister ? '注册' : '登录'}
+      open={showAuthModal}
+      onCancel={handleClose}
+      footer={null}
+      destroyOnClose
+    >
+      <Form form={form} onFinish={handleAuth} layout="vertical" style={{ marginTop: 8 }}>
+        <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+          <Input />
+        </Form.Item>
+        {isRegister && (
+          <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
+            <Input />
+          </Form.Item>
+        )}
+        <Form.Item name="password" label="密码" rules={[{ required: true, min: 6, message: '密码至少6位' }]}>
+          <Input.Password />
+        </Form.Item>
+        <Button type="primary" htmlType="submit" block>
+          {isRegister ? '注册' : '登录'}
+        </Button>
+        <Button type="link" block onClick={() => { form.resetFields(); setIsRegister(!isRegister) }}>
+          {isRegister ? '已有账号？去登录' : '没有账号？去注册'}
+        </Button>
+      </Form>
+    </Modal>
+  )
+}
+
 export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout, isAuthenticated, theme, toggleTheme, discoMode, activateDisco } = useUserStore()
+  const { user, logout, isAuthenticated, theme, toggleTheme, discoMode, activateDisco, openAuthModal } = useUserStore()
 
   const isDark = theme === 'dark'
   const longPressTimer = useRef(null)
   const discoIntervalRef = useRef(null)
   const overlayRef = useRef(null)
-  const colorIndexRef = useRef(0)
 
   // Disco color flash loop
   useEffect(() => {
@@ -70,7 +127,6 @@ export default function App() {
   }
 
   const handleClick = () => {
-    // short click = normal theme toggle
     clearTimeout(longPressTimer.current)
     toggleTheme()
   }
@@ -78,7 +134,7 @@ export default function App() {
   return (
     <Layout style={{ minHeight: '100vh', position: 'relative' }}>
 
-      {/* Disco overlay — fixed, pointer-events none so it doesn't block clicks */}
+      {/* Disco overlay */}
       <div
         ref={overlayRef}
         style={{
@@ -91,14 +147,10 @@ export default function App() {
           cursor: discoMode ? 'pointer' : 'default',
         }}
         onClick={() => {
-          if (discoMode) {
-            // 直接调用 store 的 deactivate
-            useUserStore.getState().deactivateDisco()
-          }
+          if (discoMode) useUserStore.getState().deactivateDisco()
         }}
       />
 
-      {/* Disco banner */}
       {discoMode && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0,
@@ -115,9 +167,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Disco GIF —— 画面正中间，随 discoMode 出现/消失 */}
       {discoMode && (
-        <div style = {{
+        <div style={{
           position: 'fixed',
           inset: 0,
           display: 'flex',
@@ -126,17 +177,14 @@ export default function App() {
           zIndex: 9998,
           pointerEvents: 'none',
         }}>
-        <img
-        src="/disco.gif"  // 把你的 gif 放到 frontend/public/disco.gif
-        alt="disco"
-        style={{
-          width: 320,
-          borderRadius: 16,
-          opacity: 0.92,
-        }}
-        />
+          <img
+            src="/disco.gif"
+            alt="disco"
+            style={{ width: 320, borderRadius: 16, opacity: 0.92 }}
+          />
         </div>
-      )}  
+      )}
+
       <style>{`
         @keyframes discoSlide {
           0% { background-position: 0% 50%; }
@@ -226,7 +274,7 @@ export default function App() {
                 <Button type="text" icon={<LogoutOutlined />} onClick={() => { logout(); navigate('/') }} />
               </>
             ) : (
-              <Button type="primary" onClick={() => useUserStore.getState().openAuthModal()}>登录</Button>
+              <Button type="primary" onClick={openAuthModal}>登录</Button>
             )}
           </Space>
         </Header>
@@ -241,6 +289,9 @@ export default function App() {
           </Routes>
         </Content>
       </Layout>
+
+      {/* Single AuthModal instance for the whole app */}
+      <AuthModal />
     </Layout>
   )
 }
