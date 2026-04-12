@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Drawer, Descriptions, Tag, Spin, Typography, Segmented } from 'antd'
-import { ApartmentOutlined, RadarChartOutlined } from '@ant-design/icons'
+import { Card, Drawer, Descriptions, Tag, Spin, Typography, Segmented, message, Empty } from 'antd'
+import { ApartmentOutlined, RadarChartOutlined, ExpandOutlined, CompressOutlined} from '@ant-design/icons'
 import TreeGraph from '../components/TreeGraph'
 import RadialGraph from '../components/RadialGraph'
 import { getGraph } from '../api'
@@ -20,7 +20,10 @@ export default function KnowledgeGraph() {
     try {
       const res = await getGraph('c_language')
       setGraphData(res.data)
-    } catch {}
+    } catch (error) {
+      console.error("图谱加载失败:", error)
+      message.error("无法加载知识图谱数据，请检查网络或后端状态")
+    }
     finally { setLoading(false) }
   }
 
@@ -35,14 +38,14 @@ export default function KnowledgeGraph() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>🗺️ C语言知识图谱</Title>
-        <Segmented
-          value={viewMode}
-          onChange={setViewMode}
-          options={[
-            { label: '树状图', value: 'tree', icon: <ApartmentOutlined /> },
-            { label: '环状图', value: 'radial', icon: <RadarChartOutlined /> },
-          ]}
-        />
+          <Segmented
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { label: '树状图', value: 'tree', icon: <ApartmentOutlined /> },
+              { label: '环状图', value: 'radial', icon: <RadarChartOutlined /> },
+            ]}
+          />
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -57,10 +60,16 @@ export default function KnowledgeGraph() {
     </div>
 
       <Card style={{ height: 'calc(100vh - 280px)' }} bodyStyle={{ height: '100%', padding: 0 }}>
-        {viewMode === 'tree'
-          ? <TreeGraph graphData={graphData} onNodeClick={handleNodeClick} />
-          : <RadialGraph graphData={graphData} onNodeClick={handleNodeClick} />
-        }
+        {/* Check if data exists AND has nodes */}
+        {!graphData || !graphData.nodes || graphData.nodes.length === 0 ? (
+          <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+            <Empty description="暂无图谱数据或加载失败" />
+          </div>
+        ) : viewMode === 'tree' ? (
+          <TreeGraph graphData={graphData} onNodeClick={handleNodeClick} />
+        ) : (
+          <RadialGraph graphData={graphData} onNodeClick={handleNodeClick} />
+        )}
       </Card>
 
       <Drawer

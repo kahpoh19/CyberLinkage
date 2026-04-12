@@ -1,5 +1,7 @@
 // frontend/src/utils/graphUtils.js
 
+
+
 // ── 颜色配置 ────────────────────────────────────────────────────
 // 每种掌握度状态提供 light / dark 两套方案
 // bg: 节点填充色  |  text: 标签文字色  |  border: 描边色
@@ -55,7 +57,7 @@ export function getLabelColor(mastery, theme = 'light') {
  * @param {object} graphData  { nodes, edges }
  * @param {'light'|'dark'} theme
  */
-export function buildTreeData(graphData, theme = 'light') {
+export function buildTreeData(graphData, theme = 'light', expandAll = false) {
   if (!graphData) return []
 
   const { nodes, edges } = graphData
@@ -111,6 +113,7 @@ export function buildTreeData(graphData, theme = 'light') {
       },
       _raw: node,
       children: children.length ? children : undefined,
+      collapsed: expandAll ? false : depth >=1,
     }
   }
 

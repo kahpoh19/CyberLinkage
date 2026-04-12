@@ -1,16 +1,20 @@
-import React, { useMemo, useRef, useCallback } from 'react'
+import React, { useMemo, useRef, useCallback, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import useUserStore from '../store/userStore'
 import { buildTreeData, getMasteryTokens } from '../utils/graphUtils'
+import { Button } from 'antd'
+import { ExpandOutlined, CompressOutlined } from '@ant-design/icons'
 
 export default function TreeGraph({ graphData, onNodeClick }) {
   const chartRef = useRef(null)
   const theme = useUserStore((s) => s.theme) // 'light' | 'dark'
   const isDark = theme === 'dark'
 
+  const [isExpanded, setIsExpanded] = useState(false)
+
   const treeData = useMemo(
-    () => buildTreeData(graphData, theme),
-    [graphData, theme]
+    () => buildTreeData(graphData, theme, isExpanded),
+    [graphData, theme, isExpanded]
   )
 
   const option = useMemo(() => ({
@@ -81,12 +85,25 @@ export default function TreeGraph({ graphData, onNodeClick }) {
   }, [onNodeClick])
 
   return (
-    <ReactECharts
-      ref={chartRef}
-      option={option}
-      style={{ width: '100%', height: '100%' }}
-      onEvents={{ click: handleClick }}
-      notMerge={true}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      
+      {/* Floating Button inside the graph area */}
+      <Button
+        style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}
+        icon={isExpanded ? <CompressOutlined /> : <ExpandOutlined />}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {isExpanded ? '收起全部' : '展开全部'}
+      </Button>
+
+      <ReactECharts
+        key = {isExpanded ? 'expanded' : 'collapsed'}
+        ref={chartRef}
+        option={option}
+        style={{ width: '100%', height: '100%' }}
+        onEvents={{ click: handleClick }}
+        notMerge={true}
+      />
+    </div>
   )
 }

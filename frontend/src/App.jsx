@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, Input, message } from 'antd'
+import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, Input, message, Radio, Tag } from 'antd'
 import {
   DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
   NodeIndexOutlined, RobotOutlined, LogoutOutlined,
@@ -65,7 +65,7 @@ function AuthModal() {
       footer={null}
       destroyOnClose
     >
-      <Form form={form} onFinish={handleAuth} layout="vertical" style={{ marginTop: 8 }}>
+      <Form form={form} onFinish={handleAuth} layout="vertical" style={{ marginTop: 8 }} initialValues={{ role: 'student' }}>
         <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
           <Input />
         </Form.Item>
@@ -77,6 +77,16 @@ function AuthModal() {
         <Form.Item name="password" label="密码" rules={[{ required: true, min: 6, message: '密码至少6位' }]}>
           <Input.Password />
         </Form.Item>
+
+        {isRegister && (
+          <Form.Item name="role" label="身份">
+            <Radio.Group>
+              <Radio.Button value="student">👨‍🎓 学生 (Student)</Radio.Button>
+              <Radio.Button value="teacher">👨‍🏫 教师 (Teacher)</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+        )}
+
         <Button type="primary" htmlType="submit" block>
           {isRegister ? '注册' : '登录'}
         </Button>
@@ -267,6 +277,11 @@ export default function App() {
 
             {isAuthenticated() ? (
               <>
+                {user?.role === 'teacher' && (
+                    <Tag color="blue" style={{ margin: 0 }}>
+                      👨‍🏫 Teacher Mode
+                    </Tag>
+                )}
                 <Avatar style={{ backgroundColor: discoMode ? '#ff0080' : '#1677ff', transition: 'background 0.15s' }}>
                   {user?.username?.[0]?.toUpperCase() || 'U'}
                 </Avatar>

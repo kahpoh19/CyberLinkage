@@ -26,6 +26,7 @@ class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
+    role: str = "student"
 
 
 class LoginRequest(BaseModel):
@@ -42,6 +43,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    role: str
     created_at: datetime
 
     class Config:
@@ -93,6 +95,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         username=req.username,
         email=req.email,
         hashed_password=pwd_context.hash(req.password),
+        role=req.role,
     )
     db.add(user)
     db.commit()
