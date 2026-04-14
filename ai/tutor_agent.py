@@ -5,7 +5,10 @@ from typing import Dict, List, Optional
 
 import httpx
 
-from rag_pipeline import RAGPipeline
+try:
+    from .rag_pipeline import RAGPipeline
+except ImportError:
+    from rag_pipeline import RAGPipeline
 
 
 # 加载提示词
@@ -24,6 +27,10 @@ SOCRATIC_PROMPT = _load_prompt("socratic_tutor.txt")
 PATH_PROMPT = _load_prompt("path_explainer.txt")
 
 
+class LLMServiceError(Exception):
+    """上游 LLM 服务调用失败。"""
+
+
 class SocraticTutor:
     """
     苏格拉底式 AI 辅导 Agent
@@ -37,12 +44,21 @@ class SocraticTutor:
         self,
         api_base: str = None,
         api_key: str = None,
-        model: str = "gpt-4",
+        model: str = None,
     ):
         self.api_base = api_base or os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
         self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
-        self.model = model
-        self.rag = RAGPipeline(api_base=self.api_base, api_key=self.api_key)
+        self.model = (model or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL") or "").strip()
+        self.rag: Optional[RAGPipeline] = None
+
+        if not self.model:
+            raise ValueError("OPENAI_MODEL 未配置")
+
+        try:
+            self.rag = RAGPipeline(api_base=self.api_base, api_key=self.api_key)
+        except Exception:
+            # RAG 初始化失败时降级为纯对话，避免整个服务不可用。
+            self.rag = None
 
     async def chat(
         self,
@@ -71,7 +87,12 @@ class SocraticTutor:
             student_mastery = {}
 
         # RAG 检索相关内容
-        context_chunks = self.rag.query(user_message, k=3) if self.rag.ready else []
+        context_chunks = []
+        if self.rag and self.rag.ready:
+            try:
+                context_chunks = self.rag.query(user_message, k=3)
+            except Exception:
+                context_chunks = []
         context_text = "\n\n".join(context_chunks) if context_chunks else "（暂无教材参考资料）"
 
         # 构建系统提示
@@ -135,7 +156,13 @@ class SocraticTutor:
 
     async def _call_llm(self, messages: List[Dict]) -> str:
         """调用 LLM API"""
-        url = f"{self.api_base}/chat/completions"
+        if not self.api_key:
+            raise LLMServiceError("OPENAI_API_KEY 未配置")
+
+        if not self.model:
+            raise LLMServiceError("OPENAI_MODEL 未配置")
+
+        url = f"{self.api_base.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -153,9 +180,28 @@ class SocraticTutor:
                 resp.raise_for_status()
                 data = resp.json()
                 return data["choices"][0]["message"]["content"]
-        except Exception as e:
-            return f"抱歉，AI 服务暂时不可用：{str(e)}"
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text.strip()
+            if detail:
+                detail = detail[:300]
+            else:
+                detail = exc.response.reason_phrase
+            raise LLMServiceError(
+                f"上游 LLM 返回 {exc.response.status_code}: {detail}"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise LLMServiceError(f"无法连接到上游 LLM: {str(exc)}") from exc
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise LLMServiceError(f"上游 LLM 响应格式异常: {str(exc)}") from exc
 
 
-# 全局单例
-tutor = SocraticTutor()
+_tutor: Optional[SocraticTutor] = None
+
+
+def get_tutor() -> SocraticTutor:
+    global _tutor
+
+    if _tutor is None:
+        _tutor = SocraticTutor()
+
+    return _tutor

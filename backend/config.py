@@ -20,6 +20,7 @@ class Settings:
     # LLM 服务
     LLM_API_BASE: str = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
     LLM_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    LLM_MODEL: str = os.getenv("OPENAI_MODEL", os.getenv("LLM_MODEL", "")).strip()
 
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")

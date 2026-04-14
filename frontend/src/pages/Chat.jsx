@@ -48,12 +48,19 @@ export default function Chat() {
         timestamp: new Date().toLocaleTimeString(),
       }
       setMessages((prev) => [...prev, aiMsg])
-    } catch {
+    } catch (e) {
+      const detail =
+        e.response?.data?.detail ||
+        e.response?.data?.message ||
+        e.response?.data?.response ||
+        e.message ||
+        '网络错误，请稍后重试。'
+
       setMessages((prev) => [
         ...prev,
         {
           role: 'ai',
-          content: '⚠️ 网络错误，请稍后重试。',
+          content: `⚠️ ${detail}`,
           timestamp: new Date().toLocaleTimeString(),
         },
       ])
