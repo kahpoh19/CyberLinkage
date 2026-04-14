@@ -1,13 +1,222 @@
 import React, { useState } from 'react'
 import {
-  Card, Button, Radio, Space, Steps, Progress, Result, Tag, Typography, message,
+  Card, Button, Radio, Space, Progress, Result, Tag, Typography, message, Badge
 } from 'antd'
+import {
+  CheckCircleOutlined, CloseCircleOutlined, RightOutlined,
+  LeftOutlined, TrophyOutlined, ReloadOutlined, NodeIndexOutlined
+} from '@ant-design/icons'
 import { startDiagnosis, submitDiagnosis } from '../api'
 
-const { Title, Text } = Typography
+const { Title, Text, Paragraph } = Typography
 
+// ── Difficulty badge ────────────────────────────────────────────
+function DiffBadge({ difficulty }) {
+  const color = difficulty <= 2 ? 'success' : difficulty <= 3 ? 'warning' : 'error'
+  const label = difficulty <= 2 ? '基础' : difficulty <= 3 ? '中等' : '进阶'
+  return <Tag color={color}>{'⭐'.repeat(difficulty)} {label}</Tag>
+}
+
+// ── Single question card ────────────────────────────────────────
+function QuestionCard({ exercise, answer, onAnswer, index, total }) {
+  const options = exercise?.options || {}
+  const progress = Math.round(((index) / total) * 100)
+
+  return (
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
+      {/* Progress bar */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            第 {index + 1} 题 / 共 {total} 题
+          </Text>
+          <Text type="secondary" style={{ fontSize: 13 }}>{progress}%</Text>
+        </div>
+        <Progress
+          percent={progress}
+          showInfo={false}
+          strokeColor={{ '0%': '#1677ff', '100%': '#52c41a' }}
+          trailColor="rgba(0,0,0,0.06)"
+          size={['100%', 6]}
+        />
+      </div>
+
+      <Card
+        style={{
+          borderRadius: 16,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+          border: '1px solid rgba(22,119,255,0.12)',
+        }}
+        bodyStyle={{ padding: '28px 32px' }}
+      >
+        {/* Tags */}
+        <Space style={{ marginBottom: 16 }}>
+          <Tag color="blue" style={{ borderRadius: 20 }}>{exercise.knowledge_point_id}</Tag>
+          <DiffBadge difficulty={exercise.difficulty} />
+        </Space>
+
+        {/* Question text */}
+        <div style={{
+          fontSize: 16, fontWeight: 600, lineHeight: 1.7,
+          marginBottom: 28, whiteSpace: 'pre-wrap', color: '#1a1a1a'
+        }}>
+          {exercise.question_text}
+        </div>
+
+        {/* Options */}
+        <Radio.Group
+          value={answer}
+          onChange={(e) => onAnswer(exercise.id, e.target.value)}
+          style={{ width: '100%' }}
+        >
+          <Space direction="vertical" style={{ width: '100%', gap: 10 }}>
+            {Object.entries(options).map(([key, value]) => {
+              const selected = answer === key
+              return (
+                <Radio
+                  key={key}
+                  value={key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    padding: '12px 16px',
+                    borderRadius: 10,
+                    border: `1.5px solid ${selected ? '#1677ff' : 'rgba(0,0,0,0.10)'}`,
+                    background: selected ? 'rgba(22,119,255,0.05)' : 'rgba(0,0,0,0.015)',
+                    transition: 'all 0.18s ease',
+                    cursor: 'pointer',
+                    margin: 0,
+                    width: '100%',
+                  }}
+                >
+                  <span>
+                    <Text strong style={{ color: selected ? '#1677ff' : '#666', marginRight: 8 }}>
+                      {key}.
+                    </Text>
+                    {value}
+                  </span>
+                </Radio>
+              )
+            })}
+          </Space>
+        </Radio.Group>
+      </Card>
+    </div>
+  )
+}
+
+// ── Result review card (per question) ──────────────────────────
+function ReviewCard({ exercise, userAnswer, index }) {
+  const correct = exercise.correct_answer
+  const isCorrect = userAnswer?.toUpperCase() === correct?.toUpperCase()
+  const options = exercise?.options || {}
+  const skipped = !userAnswer
+
+  return (
+    <Card
+      style={{
+        borderRadius: 14,
+        marginBottom: 16,
+        border: `1.5px solid ${isCorrect ? 'rgba(82,196,26,0.3)' : 'rgba(255,77,79,0.3)'}`,
+        background: isCorrect ? 'rgba(82,196,26,0.02)' : 'rgba(255,77,79,0.02)',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
+      }}
+      bodyStyle={{ padding: '20px 24px' }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+          {isCorrect
+            ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18, flexShrink: 0 }} />
+            : <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 18, flexShrink: 0 }} />
+          }
+          <Text strong style={{ fontSize: 14, lineHeight: 1.5 }}>
+            第{index + 1}题：{exercise.question_text}
+          </Text>
+        </div>
+        <Space style={{ flexShrink: 0, marginLeft: 12 }}>
+          <Tag color="blue" style={{ borderRadius: 20, fontSize: 11 }}>{exercise.knowledge_point_id}</Tag>
+          <DiffBadge difficulty={exercise.difficulty} />
+        </Space>
+      </div>
+
+      {/* Options with highlighting */}
+      <div style={{ marginBottom: skipped || isCorrect ? 0 : 12 }}>
+        {Object.entries(options).map(([key, value]) => {
+          const isCorrectOpt = key === correct
+          const isUserOpt = key === userAnswer
+
+          let bg = 'transparent'
+          let border = '1px solid rgba(0,0,0,0.06)'
+          let textColor = '#444'
+
+          if (isCorrectOpt) {
+            bg = 'rgba(82,196,26,0.10)'
+            border = '1px solid rgba(82,196,26,0.40)'
+            textColor = '#389e0d'
+          } else if (isUserOpt && !isCorrect) {
+            bg = 'rgba(255,77,79,0.08)'
+            border = '1px solid rgba(255,77,79,0.35)'
+            textColor = '#cf1322'
+          }
+
+          return (
+            <div
+              key={key}
+              style={{
+                padding: '8px 12px', borderRadius: 8,
+                border, background: bg, marginBottom: 6,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}
+            >
+              <Text strong style={{ color: isCorrectOpt ? '#52c41a' : isUserOpt && !isCorrect ? '#ff4d4f' : '#888', minWidth: 18 }}>
+                {key}.
+              </Text>
+              <Text style={{ color: textColor, flex: 1 }}>{value}</Text>
+              {isCorrectOpt && (
+                <Tag color="success" style={{ borderRadius: 20, fontSize: 11, margin: 0 }}>✓ 正确答案</Tag>
+              )}
+              {isUserOpt && !isCorrect && (
+                <Tag color="error" style={{ borderRadius: 20, fontSize: 11, margin: 0 }}>你的选择</Tag>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Explanation — always show for wrong answers, optional for correct */}
+      {exercise.explanation && (
+        <div style={{
+          marginTop: 12,
+          padding: '10px 14px',
+          borderRadius: 8,
+          background: isCorrect ? 'rgba(22,119,255,0.04)' : 'rgba(250,173,20,0.08)',
+          border: `1px solid ${isCorrect ? 'rgba(22,119,255,0.12)' : 'rgba(250,173,20,0.25)'}`,
+        }}>
+          <Text style={{ fontSize: 13, color: '#555' }}>
+            <Text strong style={{ color: isCorrect ? '#1677ff' : '#d46b08' }}>
+              💡 解析：
+            </Text>
+            {exercise.explanation}
+          </Text>
+        </div>
+      )}
+
+      {skipped && (
+        <div style={{
+          marginTop: 8, padding: '8px 12px', borderRadius: 8,
+          background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
+        }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>⚠️ 此题未作答</Text>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── Main Diagnosis page ─────────────────────────────────────────
 export default function Diagnosis() {
-  const [phase, setPhase] = useState('start') // start | testing | result
+  const [phase, setPhase] = useState('start')   // start | testing | result
   const [exercises, setExercises] = useState([])
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState({})
@@ -18,7 +227,7 @@ export default function Diagnosis() {
     setLoading(true)
     try {
       const res = await startDiagnosis('c_language', 10)
-      if (res.data.length === 0) {
+      if (!res.data || res.data.length === 0) {
         message.warning('题库暂时为空，请联系管理员导入题目')
         return
       }
@@ -34,7 +243,17 @@ export default function Diagnosis() {
   }
 
   const handleAnswer = (exerciseId, answer) => {
-    setAnswers({ ...answers, [exerciseId]: answer })
+    setAnswers(prev => ({ ...prev, [exerciseId]: answer }))
+  }
+
+  const handleNext = () => {
+    if (current < exercises.length - 1) {
+      setCurrent(current + 1)
+    }
+  }
+
+  const handlePrev = () => {
+    if (current > 0) setCurrent(current - 1)
   }
 
   const handleSubmit = async () => {
@@ -45,142 +264,344 @@ export default function Diagnosis() {
         answer: answers[e.id] || '',
       }))
       const res = await submitDiagnosis(answerList)
-      setResult(res.data)
+
+      if (!res.data) throw new Error('返回数据为空')
+
+      // Attach exercises to result for review
+      setResult({
+        ...res.data,
+        exercises: exercises,
+        answers: { ...answers },
+      })
       setPhase('result')
     } catch (e) {
-      message.error('提交失败')
+      console.error('Submit error:', e)
+      message.error('提交失败：' + (e.response?.data?.detail || e.message || '网络错误'))
     } finally {
       setLoading(false)
     }
   }
 
+  const handleReset = () => {
+    setPhase('start')
+    setExercises([])
+    setAnswers({})
+    setCurrent(0)
+    setResult(null)
+  }
+
+  // ── Start screen ──────────────────────────────────────────────
   if (phase === 'start') {
     return (
-      <Card style={{ maxWidth: 600, margin: '40px auto', textAlign: 'center' }}>
-        <Title level={3}>🩺 诊断测评</Title>
-        <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
+      <div style={{ maxWidth: 560, margin: '60px auto', textAlign: 'center', padding: '0 16px' }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>🩺</div>
+        <Title level={2} style={{ marginBottom: 8 }}>诊断测评</Title>
+        <Paragraph type="secondary" style={{ fontSize: 15, lineHeight: 1.8, marginBottom: 36 }}>
           通过一组精选题目，快速定位你的薄弱知识点。
           <br />
-          系统会根据你的答题情况，使用 BKT 算法智能评估掌握程度。
-        </Text>
-        <Button type="primary" size="large" onClick={handleStart} loading={loading}>
-          开始诊断
+          系统将使用 BKT 算法智能评估你的掌握程度。
+        </Paragraph>
+
+        <div style={{
+          display: 'flex', gap: 16, justifyContent: 'center',
+          flexWrap: 'wrap', marginBottom: 32
+        }}>
+          {['🎯 10道精选题', '⏱️ 约10分钟', '📊 即时分析', '🛤️ 路径推荐'].map(t => (
+            <div key={t} style={{
+              padding: '8px 18px', borderRadius: 24,
+              background: 'rgba(22,119,255,0.06)',
+              border: '1px solid rgba(22,119,255,0.15)',
+              fontSize: 13, color: '#1677ff', fontWeight: 500
+            }}>{t}</div>
+          ))}
+        </div>
+
+        <Button
+          type="primary" size="large" onClick={handleStart} loading={loading}
+          style={{ borderRadius: 10, height: 48, paddingInline: 40, fontSize: 16 }}
+        >
+          开始诊断 <RightOutlined />
         </Button>
-      </Card>
+      </div>
     )
   }
 
+  // ── Testing screen ────────────────────────────────────────────
   if (phase === 'testing') {
     const ex = exercises[current]
-    const options = ex?.options || {}
     const answered = Object.keys(answers).length
+    const isLast = current === exercises.length - 1
+    const currentAnswered = !!answers[ex?.id]
+    const allAnswered = answered >= exercises.length
 
     return (
-      <div style={{ maxWidth: 700, margin: '0 auto' }}>
-        <Steps
-          current={current}
-          size="small"
-          style={{ marginBottom: 24 }}
-          items={exercises.map((_, i) => ({
-            title: `第${i + 1}题`,
-            status: answers[exercises[i].id] ? 'finish' : i === current ? 'process' : 'wait',
-          }))}
-        />
-
-        <Card>
-          <Tag color="blue">{ex.knowledge_point_id}</Tag>
-          <Tag color={ex.difficulty <= 2 ? 'green' : ex.difficulty <= 3 ? 'orange' : 'red'}>
-            难度 {'⭐'.repeat(ex.difficulty)}
-          </Tag>
-
-          <Title level={5} style={{ marginTop: 16 }}>
-            {current + 1}. {ex.question_text}
-          </Title>
-
-          <Radio.Group
-            value={answers[ex.id]}
-            onChange={(e) => handleAnswer(ex.id, e.target.value)}
-            style={{ width: '100%' }}
-          >
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {Object.entries(options).map(([key, value]) => (
-                <Radio key={key} value={key} style={{ display: 'block', padding: '8px 0' }}>
-                  <Text strong>{key}.</Text> {value}
-                </Radio>
-              ))}
-            </Space>
-          </Radio.Group>
-
-          <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
-            <Button disabled={current === 0} onClick={() => setCurrent(current - 1)}>
-              上一题
-            </Button>
-            <Text type="secondary">
-              已答 {answered}/{exercises.length}
-            </Text>
-            {current < exercises.length - 1 ? (
-              <Button type="primary" onClick={() => setCurrent(current + 1)}>
-                下一题
-              </Button>
-            ) : (
-              <Button
-                type="primary"
-                onClick={handleSubmit}
-                loading={loading}
-                disabled={answered < exercises.length}
+      <div style={{ padding: '8px 0' }}>
+        {/* Dot navigator */}
+        <div style={{
+          display: 'flex', gap: 6, justifyContent: 'center',
+          flexWrap: 'wrap', marginBottom: 24
+        }}>
+          {exercises.map((e, i) => {
+            const ans = answers[e.id]
+            const isCur = i === current
+            return (
+              <button
+                key={i}
+                onClick={() => setCurrent(i)}
+                title={`第${i + 1}题${ans ? ' ✓' : ''}`}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  border: isCur ? '2px solid #1677ff' : '2px solid transparent',
+                  background: ans ? '#52c41a' : isCur ? '#e6f4ff' : 'rgba(0,0,0,0.06)',
+                  color: ans ? '#fff' : isCur ? '#1677ff' : '#999',
+                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                  transition: 'all 0.15s',
+                  boxShadow: isCur ? '0 0 0 3px rgba(22,119,255,0.15)' : 'none',
+                }}
               >
-                提交诊断
-              </Button>
-            )}
+                {i + 1}
+              </button>
+            )
+          })}
+        </div>
+
+        {ex && (
+          <QuestionCard
+            exercise={ex}
+            answer={answers[ex.id]}
+            onAnswer={handleAnswer}
+            index={current}
+            total={exercises.length}
+          />
+        )}
+
+        {/* Navigation */}
+        <div style={{
+          maxWidth: 680, margin: '20px auto 0',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
+          <Button
+            onClick={handlePrev} disabled={current === 0}
+            icon={<LeftOutlined />} size="large"
+            style={{ borderRadius: 10 }}
+          >
+            上一题
+          </Button>
+
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            已答 <Text strong style={{ color: answered === exercises.length ? '#52c41a' : '#1677ff' }}>
+              {answered}
+            </Text>/{exercises.length}
+          </Text>
+
+          {!isLast ? (
+            <Button
+              type={currentAnswered ? 'primary' : 'default'}
+              onClick={handleNext} size="large"
+              icon={<RightOutlined />} iconPosition="end"
+              style={{ borderRadius: 10 }}
+            >
+              下一题
+            </Button>
+          ) : (
+            <Button
+              type="primary" onClick={handleSubmit} loading={loading}
+              size="large" disabled={!allAnswered}
+              style={{ borderRadius: 10 }}
+              title={!allAnswered ? `还有 ${exercises.length - answered} 题未答` : ''}
+            >
+              {allAnswered ? '提交诊断' : `还有${exercises.length - answered}题未答`}
+            </Button>
+          )}
+        </div>
+
+        {/* Unanswered warning */}
+        {isLast && !allAnswered && (
+          <div style={{ maxWidth: 680, margin: '12px auto 0', textAlign: 'center' }}>
+            <Text type="warning" style={{ fontSize: 13 }}>
+              ⚠️ 请通过上方数字导航返回未答题目
+            </Text>
           </div>
-        </Card>
+        )}
       </div>
     )
   }
 
-  // phase === 'result'
-  return (
-    <div style={{ maxWidth: 700, margin: '0 auto' }}>
-      <Result
-        status={result.accuracy >= 0.6 ? 'success' : 'warning'}
-        title={`诊断完成！正确率 ${(result.accuracy * 100).toFixed(1)}%`}
-        subTitle={`共 ${result.total} 题，答对 ${result.correct} 题`}
-      />
+  // ── Result screen ─────────────────────────────────────────────
+  if (phase === 'result') {
+    if (!result) {
+      return (
+        <div style={{ textAlign: 'center', padding: 60 }}>
+          <Text type="danger">结果加载失败，请重新诊断</Text>
+          <br /><br />
+          <Button onClick={handleReset}>重新诊断</Button>
+        </div>
+      )
+    }
 
-      <Card title="📊 各知识点掌握度" style={{ marginBottom: 16 }}>
-        {Object.entries(result.mastery_map).map(([kp, mastery]) => (
-          <div key={kp} style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Text>{kp}</Text>
-              <Text type={mastery < 0.4 ? 'danger' : mastery < 0.7 ? 'warning' : 'success'}>
-                {(mastery * 100).toFixed(1)}%
+    const { total = 0, correct = 0, accuracy = 0, mastery_map = {}, weak_points = [], exercises: exList = [], answers: ans = {} } = result
+    const accuracyPct = Math.round((accuracy || 0) * 100)
+    const isGood = accuracyPct >= 60
+
+    // Separate correct and wrong
+    const wrongExercises = exList.filter(e => {
+      const userAns = ans[e.id]
+      return !userAns || userAns.toUpperCase() !== e.correct_answer?.toUpperCase()
+    })
+    const correctExercises = exList.filter(e => {
+      const userAns = ans[e.id]
+      return userAns && userAns.toUpperCase() === e.correct_answer?.toUpperCase()
+    })
+
+    return (
+      <div style={{ maxWidth: 740, margin: '0 auto', padding: '0 0 40px' }}>
+        {/* Score banner */}
+        <Card
+          style={{
+            borderRadius: 20, marginBottom: 24,
+            background: isGood
+              ? 'linear-gradient(135deg, rgba(82,196,26,0.08), rgba(22,119,255,0.05))'
+              : 'linear-gradient(135deg, rgba(255,77,79,0.06), rgba(250,173,20,0.05))',
+            border: `1.5px solid ${isGood ? 'rgba(82,196,26,0.2)' : 'rgba(255,77,79,0.2)'}`,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+          }}
+          bodyStyle={{ padding: '28px 32px' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 64 }}>{isGood ? '🎉' : '💪'}</div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <Title level={2} style={{ margin: 0, color: isGood ? '#389e0d' : '#cf1322' }}>
+                {accuracyPct}%
+              </Title>
+              <Text type="secondary" style={{ fontSize: 15 }}>
+                共 {total} 题 · 答对 {correct} 题 · 答错 {total - correct} 题
               </Text>
+              <div style={{ marginTop: 8 }}>
+                {isGood
+                  ? <Text style={{ color: '#389e0d', fontWeight: 500 }}>整体表现不错，继续保持！</Text>
+                  : <Text style={{ color: '#d46b08', fontWeight: 500 }}>别灰心，查看下方错题详解吧！</Text>
+                }
+              </div>
             </div>
             <Progress
-              percent={Math.round(mastery * 100)}
-              strokeColor={mastery < 0.4 ? '#ff4d4f' : mastery < 0.7 ? '#faad14' : '#52c41a'}
-              showInfo={false}
+              type="circle" percent={accuracyPct}
+              strokeColor={isGood ? '#52c41a' : '#ff4d4f'}
+              size={90}
+              format={p => <span style={{ fontSize: 18, fontWeight: 700, color: isGood ? '#52c41a' : '#ff4d4f' }}>{p}%</span>}
             />
           </div>
-        ))}
-      </Card>
-
-      {result.weak_points.length > 0 && (
-        <Card title="⚠️ 薄弱知识点">
-          <Space wrap>
-            {result.weak_points.map((kp) => (
-              <Tag key={kp} color="red">{kp}</Tag>
-            ))}
-          </Space>
         </Card>
-      )}
 
-      <div style={{ textAlign: 'center', marginTop: 24 }}>
-        <Space>
-          <Button onClick={() => setPhase('start')}>重新诊断</Button>
-          <Button type="primary" href="/path">查看学习路径 →</Button>
-        </Space>
+        {/* Mastery map */}
+        {Object.keys(mastery_map).length > 0 && (
+          <Card
+            title={<span>📊 各知识点掌握度</span>}
+            style={{ borderRadius: 16, marginBottom: 24, border: '1px solid rgba(0,0,0,0.08)' }}
+            bodyStyle={{ padding: '16px 24px' }}
+          >
+            {Object.entries(mastery_map).sort(([, a], [, b]) => a - b).map(([kp, mastery]) => {
+              const pct = Math.round(mastery * 100)
+              const color = pct < 40 ? '#ff4d4f' : pct < 70 ? '#faad14' : '#52c41a'
+              return (
+                <div key={kp} style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 13 }}>{kp}</Text>
+                    <Text strong style={{ color, fontSize: 13 }}>{pct}%</Text>
+                  </div>
+                  <Progress
+                    percent={pct} strokeColor={color}
+                    showInfo={false} size={['100%', 6]}
+                    trailColor="rgba(0,0,0,0.06)"
+                  />
+                </div>
+              )
+            })}
+          </Card>
+        )}
+
+        {/* Weak points */}
+        {weak_points.length > 0 && (
+          <Card
+            style={{
+              borderRadius: 16, marginBottom: 24,
+              border: '1px solid rgba(255,77,79,0.2)',
+              background: 'rgba(255,77,79,0.02)',
+            }}
+            bodyStyle={{ padding: '16px 24px' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text strong style={{ fontSize: 15 }}>⚠️ 需要重点复习</Text>
+            </div>
+            <Space wrap>
+              {weak_points.map(kp => (
+                <Tag key={kp} color="error" style={{ borderRadius: 20, padding: '4px 12px', fontSize: 13 }}>
+                  {kp}
+                </Tag>
+              ))}
+            </Space>
+          </Card>
+        )}
+
+        {/* Wrong answers review */}
+        {wrongExercises.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 18 }} />
+              <Title level={5} style={{ margin: 0, color: '#ff4d4f' }}>
+                错题解析 ({wrongExercises.length} 题)
+              </Title>
+            </div>
+            {wrongExercises.map((ex, i) => (
+              <ReviewCard
+                key={ex.id}
+                exercise={ex}
+                userAnswer={ans[ex.id]}
+                index={exList.indexOf(ex)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Correct answers review (collapsed style) */}
+        {correctExercises.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} />
+              <Title level={5} style={{ margin: 0, color: '#52c41a' }}>
+                答对的题目 ({correctExercises.length} 题)
+              </Title>
+            </div>
+            {correctExercises.map((ex) => (
+              <ReviewCard
+                key={ex.id}
+                exercise={ex}
+                userAnswer={ans[ex.id]}
+                index={exList.indexOf(ex)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 8 }}>
+          <Button
+            size="large" onClick={handleReset}
+            icon={<ReloadOutlined />}
+            style={{ borderRadius: 10 }}
+          >
+            重新诊断
+          </Button>
+          <Button
+            type="primary" size="large" href="/path"
+            icon={<NodeIndexOutlined />}
+            style={{ borderRadius: 10 }}
+          >
+            查看学习路径
+          </Button>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  return null
 }
