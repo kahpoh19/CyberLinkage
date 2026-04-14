@@ -4,14 +4,16 @@ import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, 
 import {
   DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
   NodeIndexOutlined, RobotOutlined, LogoutOutlined,
-  SunOutlined, MoonOutlined,
+  SunOutlined, MoonOutlined,BookOutlined
 } from '@ant-design/icons'
+
 
 import Dashboard from './pages/Dashboard'
 import Diagnosis from './pages/Diagnosis'
 import KnowledgeGraph from './pages/KnowledgeGraph'
 import LearningPath from './pages/LearningPath'
 import Chat from './pages/Chat'
+import TeacherUpload from './pages/TeacherUpload'
 import useUserStore from './store/userStore'
 import { login, register, getMe } from './api'
 
@@ -24,6 +26,7 @@ const menuItems = [
   { key: '/graph', icon: <ApartmentOutlined />, label: '知识图谱' },
   { key: '/path', icon: <NodeIndexOutlined />, label: '学习路径' },
   { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
+  { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
 ]
 
 const DISCO_COLORS = [
@@ -301,6 +304,7 @@ export default function App() {
             <Route path="/graph" element={<KnowledgeGraph />} />
             <Route path="/path" element={<LearningPath />} />
             <Route path="/chat" element={<Chat />} />
+            <Route path="/teacher" element={<TeacherUpload />} />
           </Routes>
         </Content>
       </Layout>
