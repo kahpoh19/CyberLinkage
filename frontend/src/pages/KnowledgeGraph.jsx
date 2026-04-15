@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Drawer, Descriptions, Tag, Spin, Typography, Segmented, message, Empty } from 'antd'
-import { ApartmentOutlined, RadarChartOutlined, ExpandOutlined, CompressOutlined} from '@ant-design/icons'
+import { ApartmentOutlined, RadarChartOutlined } from '@ant-design/icons'
 import TreeGraph from '../components/TreeGraph'
 import RadialGraph from '../components/RadialGraph'
 import { getGraph } from '../api'
@@ -53,9 +53,10 @@ export default function KnowledgeGraph() {
       <Tag color="#faad14">🟡 学习中</Tag>
       <Tag color="#52c41a">🟢 已掌握</Tag>
       <Tag color="#999">⚪ 未测试</Tag>
-      {/* 加这行 */}
       <span style={{ marginLeft: 16, fontSize: 12, color: '#999' }}>
-        💡 点击节点可展开 / 收起子知识点，再次点击查看详情
+        {viewMode === 'tree'
+          ? '💡 点击节点可展开 / 收起子知识点，再次点击查看详情'
+          : '💡 拖动画布 / 滚轮缩放，点击知识点查看详情'}
       </span>
     </div>
 
