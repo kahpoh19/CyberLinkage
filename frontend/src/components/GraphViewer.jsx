@@ -20,7 +20,7 @@ const CROSS_LINK_COLORS = [
 
 export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
   const chartRef = useRef(null)
-  const theme = useUserStore((s) => s.theme)
+  const theme = useUserStore((s) => s.resolvedTheme)
   const isDark = theme === 'dark'
 
   const { treeNodes, treeEdges } = useMemo(() => {

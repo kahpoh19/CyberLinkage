@@ -7,7 +7,7 @@ import { ExpandOutlined, CompressOutlined } from '@ant-design/icons'
 
 export default function TreeGraph({ graphData, onNodeClick }) {
   const chartRef = useRef(null)
-  const theme = useUserStore((s) => s.theme) // 'light' | 'dark'
+  const theme = useUserStore((s) => s.resolvedTheme)
   const isDark = theme === 'dark'
 
   const [isExpanded, setIsExpanded] = useState(false)

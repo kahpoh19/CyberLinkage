@@ -335,7 +335,7 @@ function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds
 // ─── 主组件 ──────────────────────────────────────────────────────
 
 export default function Sandbox() {
-  const themeMode = useUserStore(s => s.theme)
+  const themeMode = useUserStore(s => s.resolvedTheme)
   const isDark = themeMode === 'dark'
 
   const canvasRef    = useRef(null)

@@ -5,7 +5,7 @@ import { buildTreeData, getMasteryTokens } from '../utils/graphUtils'
 
 export default function RadialGraph({ graphData, onNodeClick }) {
   const chartRef = useRef(null)
-  const theme = useUserStore((s) => s.theme)
+  const theme = useUserStore((s) => s.resolvedTheme)
   const isDark = theme === 'dark'
 
   const treeData = useMemo(

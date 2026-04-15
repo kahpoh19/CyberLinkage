@@ -1,49 +1,95 @@
 import { create } from 'zustand'
 
-const useUserStore = create((set, get) => ({
-  user: null,
-  token: localStorage.getItem('cyberlinkage_token') || null,
-  theme: localStorage.getItem('cyberlinkage_theme') || 'light',
-  discoMode: false,
-  showAuthModal: false,          // ← add
-  openAuthModal: () => set({ showAuthModal: true }),   // ← add
-  closeAuthModal: () => set({ showAuthModal: false }),  // ← add
+const THEME_STORAGE_KEY = 'cyberlinkage_theme'
+const VALID_THEMES = new Set(['auto', 'light', 'dark'])
 
-  setUser: (user) => set({ user }),
+function normalizeTheme(theme) {
+  return VALID_THEMES.has(theme) ? theme : 'auto'
+}
 
-  setToken: (token) => {
-    localStorage.setItem('cyberlinkage_token', token)
-    set({ token })
-  },
+function getSystemTheme() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light'
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
 
-  login: (user, token) => {
-    localStorage.setItem('cyberlinkage_token', token)
-    set({ user, token })
-  },
+function resolveTheme(theme) {
+  const normalized = normalizeTheme(theme)
+  return normalized === 'auto' ? getSystemTheme() : normalized
+}
 
-  logout: () => {
-    localStorage.removeItem('cyberlinkage_token')
-    set({ user: null, token: null })
-  },
+function getInitialTheme() {
+  if (typeof window === 'undefined') return 'auto'
+  return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'auto')
+}
 
-  isAuthenticated: () => !!get().token,
+function persistTheme(theme) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+}
 
-  toggleTheme: () => {
-    const next = get().theme === 'light' ? 'dark' : 'light'
-    localStorage.setItem('cyberlinkage_theme', next)
-    set({ theme: next })
-  },
+const useUserStore = create((set, get) => {
+  const initialTheme = getInitialTheme()
 
-  activateDisco: () => {
-    if (get().discoMode) return
-    const timer = setTimeout(() => set({ discoMode: false, _discoTimer: null }), 10000)
-    set({ discoMode: true, _discoTimer: timer })
-  },
+  return {
+    theme: initialTheme,
+    resolvedTheme: resolveTheme(initialTheme),
+    user: null,
+    token: localStorage.getItem('cyberlinkage_token') || null,
+    discoMode: false,
+    showAuthModal: false,          // ← add
+    openAuthModal: () => set({ showAuthModal: true }),   // ← add
+    closeAuthModal: () => set({ showAuthModal: false }),  // ← add
 
-  deactivateDisco: () => {
-    clearTimeout(get()._discoTimer)
-    set({ discoMode: false, _discoTimer: null })
-  },
-}))
+    setUser: (user) => set({ user }),
+
+    setToken: (token) => {
+      localStorage.setItem('cyberlinkage_token', token)
+      set({ token })
+    },
+
+    login: (user, token) => {
+      localStorage.setItem('cyberlinkage_token', token)
+      set({ user, token })
+    },
+
+    logout: () => {
+      localStorage.removeItem('cyberlinkage_token')
+      set({ user: null, token: null })
+    },
+
+    isAuthenticated: () => !!get().token,
+
+    setTheme: (theme) => {
+      const next = normalizeTheme(theme)
+      persistTheme(next)
+      set({ theme: next, resolvedTheme: resolveTheme(next) })
+    },
+
+    toggleTheme: () => {
+      const order = ['auto', 'light', 'dark']
+      const current = normalizeTheme(get().theme)
+      const next = order[(order.indexOf(current) + 1) % order.length]
+      persistTheme(next)
+      set({ theme: next, resolvedTheme: resolveTheme(next) })
+    },
+
+    syncSystemTheme: () => {
+      set({ resolvedTheme: resolveTheme(get().theme) })
+    },
+
+    activateDisco: () => {
+      if (get().discoMode) return
+      const timer = setTimeout(() => set({ discoMode: false, _discoTimer: null }), 10000)
+      set({ discoMode: true, _discoTimer: timer })
+    },
+
+    deactivateDisco: () => {
+      clearTimeout(get()._discoTimer)
+      set({ discoMode: false, _discoTimer: null })
+    },
+  }
+})
 
 export default useUserStore

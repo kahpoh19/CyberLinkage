@@ -13,7 +13,6 @@ import React, {
 import { Switch, DatePicker, Tooltip } from 'antd'
 import dayjs from 'dayjs'
 import useTeacherStore from '../store/teacherStore'
-import useUserStore    from '../store/userStore'
 
 // ── Subject catalogue ─────────────────────────────────────────────
 export const SUBJECTS = [
@@ -837,8 +836,6 @@ function EmptyState({ subject }) {
 // Main page component
 // ════════════════════════════════════════════════════════════════
 export default function TeacherUpload() {
-  const theme = useUserStore(s => s.theme)
-
   const files        = useTeacherStore(s => s.files)
   const addFile      = useTeacherStore(s => s.addFile)
   const updateFile   = useTeacherStore(s => s.updateFile)
@@ -851,9 +848,6 @@ export default function TeacherUpload() {
   const [defaultReleaseAt,  setDefaultReleaseAt]   = useState(null)
 
   useEffect(() => { injectCSS() }, [])
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light')
-  }, [theme])
 
   const subjectCounts = useMemo(() => {
     const counts = {}

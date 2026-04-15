@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ConfigProvider, theme as antTheme } from 'antd'
@@ -8,12 +8,36 @@ import useUserStore from './store/userStore'
 
 function Root() {
   const themeMode = useUserStore((s) => s.theme)
+  const resolvedTheme = useUserStore((s) => s.resolvedTheme)
+  const syncSystemTheme = useUserStore((s) => s.syncSystemTheme)
+
+  useEffect(() => {
+    syncSystemTheme()
+
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const handleChange = () => syncSystemTheme()
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handleChange)
+      return () => media.removeEventListener('change', handleChange)
+    }
+
+    media.addListener(handleChange)
+    return () => media.removeListener(handleChange)
+  }, [themeMode, syncSystemTheme])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', resolvedTheme)
+    document.documentElement.style.colorScheme = resolvedTheme
+  }, [resolvedTheme])
 
   return (
     <ConfigProvider
       locale={zhCN}
       theme={{
-        algorithm: themeMode === 'dark'
+        algorithm: resolvedTheme === 'dark'
           ? antTheme.darkAlgorithm
           : antTheme.defaultAlgorithm,
         token: { colorPrimary: '#1677ff' },

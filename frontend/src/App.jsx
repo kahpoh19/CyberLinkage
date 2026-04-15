@@ -4,7 +4,7 @@ import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, 
 import {
   DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
   NodeIndexOutlined, RobotOutlined, LogoutOutlined,
-  SunOutlined, MoonOutlined,BookOutlined,ToolOutlined
+  SunOutlined, MoonOutlined, DesktopOutlined, BookOutlined, ToolOutlined
 } from '@ant-design/icons'
 
 
@@ -106,10 +106,21 @@ function AuthModal() {
 export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout, isAuthenticated, theme, toggleTheme, discoMode, activateDisco, openAuthModal } = useUserStore()
+  const {
+    user,
+    logout,
+    isAuthenticated,
+    theme,
+    resolvedTheme,
+    toggleTheme,
+    discoMode,
+    activateDisco,
+    openAuthModal,
+  } = useUserStore()
 
-  const isDark = theme === 'dark'
+  const isDark = resolvedTheme === 'dark'
   const longPressTimer = useRef(null)
+  const longPressTriggered = useRef(false)
   const discoIntervalRef = useRef(null)
   const overlayRef = useRef(null)
 
@@ -131,20 +142,40 @@ export default function App() {
     return () => clearInterval(discoIntervalRef.current)
   }, [discoMode])
 
-  const handlePressStart = () => {
+  const handleThemePressStart = () => {
+    longPressTriggered.current = false
     longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true
       activateDisco()
     }, 800)
   }
 
-  const handlePressEnd = () => {
+  const handleThemePressEnd = () => {
     clearTimeout(longPressTimer.current)
   }
 
-  const handleClick = () => {
+  const handleThemeClick = () => {
     clearTimeout(longPressTimer.current)
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false
+      return
+    }
     toggleTheme()
   }
+
+  const currentThemeLabel = theme === 'auto'
+    ? `Auto（当前 ${isDark ? 'Dark' : 'Light'}）`
+    : theme === 'light'
+      ? 'Light'
+      : 'Dark'
+  const nextThemeLabel = theme === 'auto' ? 'Light' : theme === 'light' ? 'Dark' : 'Auto'
+  const themeButtonIcon = discoMode
+    ? <span style={{ fontSize: 18 }}>🪩</span>
+    : theme === 'auto'
+      ? <DesktopOutlined style={{ fontSize: 18, color: '#1677ff' }} />
+      : theme === 'light'
+        ? <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
+        : <MoonOutlined style={{ fontSize: 18, color: '#f0f0f0' }} />
 
   return (
     <Layout style={{ minHeight: '100vh', position: 'relative' }}>
@@ -241,39 +272,38 @@ export default function App() {
           background: isDark ? '#141414' : '#fff',
           padding: '0 24px',
           display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
           justifyContent: 'space-between',
           alignItems: 'center',
           borderBottom: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
           position: 'relative',
           zIndex: 10,
+          height: 'auto',
+          minHeight: 64,
         }}>
-          <Title level={5} style={{ margin: 0 }}>
+          <Title level={5} style={{ margin: 0, lineHeight: 1.3 }}>
             基于知识图谱的个性化学习伴侣
           </Title>
-          <Space>
-            <Tooltip title={discoMode ? '🕺 DISCO!' : isDark ? '切换浅色模式（长按开派对）' : '切换深色模式（长按开派对）'}>
+          <Space wrap>
+            <Tooltip title={discoMode ? '🕺 DISCO!' : `${currentThemeLabel}，点击切换到 ${nextThemeLabel}，长按开启 DISCO MODE`}>
               <Button
                 type="text"
                 shape="circle"
-                onMouseDown={handlePressStart}
-                onMouseUp={handlePressEnd}
-                onMouseLeave={handlePressEnd}
-                onTouchStart={handlePressStart}
-                onTouchEnd={handlePressEnd}
-                onClick={handleClick}
+                onMouseDown={handleThemePressStart}
+                onMouseUp={handleThemePressEnd}
+                onMouseLeave={handleThemePressEnd}
+                onTouchStart={handleThemePressStart}
+                onTouchEnd={handleThemePressEnd}
+                onClick={handleThemeClick}
                 icon={
                   <span className="disco-btn-icon">
-                    {discoMode
-                      ? <span style={{ fontSize: 18 }}>🪩</span>
-                      : isDark
-                        ? <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
-                        : <MoonOutlined style={{ fontSize: 18, color: '#595959' }} />
-                    }
+                    {themeButtonIcon}
                   </span>
                 }
                 style={{
                   transition: 'transform 0.3s ease',
-                  transform: isDark && !discoMode ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transform: discoMode ? 'rotate(12deg)' : 'rotate(0deg)',
                   outline: discoMode ? '2px solid #ff0080' : 'none',
                   borderRadius: '50%',
                 }}
