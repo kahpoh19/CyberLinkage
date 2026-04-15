@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 const THEME_STORAGE_KEY = 'cyberlinkage_theme'
 const VALID_THEMES = new Set(['auto', 'light', 'dark'])
+const CHAT_WELCOME_MESSAGE = '你好！我是CyberLinkage助教 🧠\n\n我可以帮你解答 C 语言学习中遇到的问题。默认使用「苏格拉底式引导」—— 我会通过提问帮你自己发现答案，而不是直接告诉你。\n\n如果你想要直接解释，可以关闭引导模式。\n\n有什么想问的？'
 
 function normalizeTheme(theme) {
   return VALID_THEMES.has(theme) ? theme : 'auto'
@@ -29,6 +30,16 @@ function persistTheme(theme) {
   window.localStorage.setItem(THEME_STORAGE_KEY, theme)
 }
 
+function createInitialChatMessages() {
+  return [
+    {
+      role: 'ai',
+      content: CHAT_WELCOME_MESSAGE,
+      timestamp: new Date().toLocaleTimeString(),
+    },
+  ]
+}
+
 const useUserStore = create((set, get) => {
   const initialTheme = getInitialTheme()
 
@@ -38,6 +49,9 @@ const useUserStore = create((set, get) => {
     user: null,
     token: localStorage.getItem('cyberlinkage_token') || null,
     discoMode: false,
+    chatMessages: createInitialChatMessages(),
+    chatLoading: false,
+    socraticMode: true,
     showAuthModal: false,          // ← add
     openAuthModal: () => set({ showAuthModal: true }),   // ← add
     closeAuthModal: () => set({ showAuthModal: false }),  // ← add
@@ -56,7 +70,13 @@ const useUserStore = create((set, get) => {
 
     logout: () => {
       localStorage.removeItem('cyberlinkage_token')
-      set({ user: null, token: null })
+      set({
+        user: null,
+        token: null,
+        chatMessages: createInitialChatMessages(),
+        chatLoading: false,
+        socraticMode: true,
+      })
     },
 
     isAuthenticated: () => !!get().token,
@@ -78,6 +98,18 @@ const useUserStore = create((set, get) => {
     syncSystemTheme: () => {
       set({ resolvedTheme: resolveTheme(get().theme) })
     },
+
+    setSocraticMode: (socraticMode) => set({ socraticMode }),
+
+    setChatLoading: (chatLoading) => set({ chatLoading }),
+
+    addChatMessage: (message) => {
+      set((state) => ({ chatMessages: [...state.chatMessages, message] }))
+    },
+
+    setChatMessages: (chatMessages) => set({ chatMessages }),
+
+    resetChatMessages: () => set({ chatMessages: createInitialChatMessages(), chatLoading: false }),
 
     activateDisco: () => {
       if (get().discoMode) return

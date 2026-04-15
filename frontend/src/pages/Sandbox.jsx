@@ -898,6 +898,7 @@ export default function Sandbox() {
 
   return (
     <div
+      className="sandbox-page"
       ref={containerRef}
       style={{
         minHeight: '100vh', overflowY: 'auto',
@@ -905,15 +906,25 @@ export default function Sandbox() {
           ? 'linear-gradient(135deg,#080b14 0%,#0d1120 50%,#080b14 100%)'
           : 'linear-gradient(135deg,#f1f5f9 0%,#e8edf5 100%)',
         padding: '0 0 32px',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: 'inherit',
+        fontWeight: 400,
         color: textPri, transition: 'background 0.3s',
       }}
     >
+      <style>{`
+        .sandbox-page,
+        .sandbox-page button,
+        .sandbox-page input,
+        .sandbox-page select,
+        .sandbox-page textarea {
+          font-family: inherit;
+        }
+      `}</style>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px 12px' }}>
         <div>
           <h1 style={{
-            fontSize: 20, fontWeight: 500, margin: '0 0 4px',
+            fontSize: 20, fontWeight: 600, margin: '0 0 4px',
             background: isDark
               ? 'linear-gradient(90deg,#a78bfa,#22d3ee)'
               : 'linear-gradient(90deg,#7c3aed,#0694a2)',

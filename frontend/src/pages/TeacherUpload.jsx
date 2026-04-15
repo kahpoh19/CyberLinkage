@@ -281,6 +281,14 @@ const THEME_CSS = `
     color: var(--t-text-sub);
     white-space: nowrap;
   }
+
+  .teacher-upload-page,
+  .teacher-upload-page button,
+  .teacher-upload-page input,
+  .teacher-upload-page select,
+  .teacher-upload-page textarea {
+    font-family: inherit;
+  }
 `
 
 function injectCSS() {
@@ -898,10 +906,11 @@ export default function TeacherUpload() {
   const onSetReleaseAt  = useCallback((id, ts) => updateFile(id, { releaseAt: ts }), [updateFile])
 
   return (
-    <div style={{
+    <div className="teacher-upload-page" style={{
       minHeight: '100%',
       padding: '26px 22px',
-      fontFamily: 'var(--font-sans, system-ui, sans-serif)',
+      fontFamily: 'inherit',
+      fontWeight: 400,
       color: 'var(--t-text)',
       boxSizing: 'border-box',
       transition: 'color 0.2s',
@@ -909,7 +918,7 @@ export default function TeacherUpload() {
       {/* Page header */}
       <div style={{ marginBottom: 22 }}>
         <h1 style={{
-          fontSize: 20, fontWeight: 500, margin: '0 0 5px',
+          fontSize: 20, fontWeight: 600, margin: '0 0 5px',
           background: 'linear-gradient(90deg,#c084fc,#38bdf8)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block',
         }}>

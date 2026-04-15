@@ -3,20 +3,18 @@ import { Card, Input, Button, Switch, Typography, Space } from 'antd'
 import { SendOutlined, RobotOutlined } from '@ant-design/icons'
 import ChatBubble from '../components/ChatBubble'
 import { chatWithAI } from '../api'
+import useUserStore from '../store/userStore'
 
 const { Title, Text } = Typography
 
 export default function Chat() {
-  const [messages, setMessages] = useState([
-    {
-      role: 'ai',
-      content: '你好！我是CyberLinkage助教 🧠\n\n我可以帮你解答 C 语言学习中遇到的问题。默认使用「苏格拉底式引导」—— 我会通过提问帮你自己发现答案，而不是直接告诉你。\n\n如果你想要直接解释，可以关闭引导模式。\n\n有什么想问的？',
-      timestamp: new Date().toLocaleTimeString(),
-    },
-  ])
+  const messages = useUserStore((s) => s.chatMessages)
+  const addChatMessage = useUserStore((s) => s.addChatMessage)
+  const socraticMode = useUserStore((s) => s.socraticMode)
+  const setSocraticMode = useUserStore((s) => s.setSocraticMode)
+  const loading = useUserStore((s) => s.chatLoading)
+  const setChatLoading = useUserStore((s) => s.setChatLoading)
   const [input, setInput] = useState('')
-  const [socraticMode, setSocraticMode] = useState(true)
-  const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -32,9 +30,9 @@ export default function Chat() {
       content: text,
       timestamp: new Date().toLocaleTimeString(),
     }
-    setMessages((prev) => [...prev, userMsg])
+    addChatMessage(userMsg)
     setInput('')
-    setLoading(true)
+    setChatLoading(true)
 
     try {
       const history = messages.map((m) => ({
@@ -47,7 +45,7 @@ export default function Chat() {
         content: res.data.response || res.data.message || '抱歉，我暂时无法回答这个问题。',
         timestamp: new Date().toLocaleTimeString(),
       }
-      setMessages((prev) => [...prev, aiMsg])
+      addChatMessage(aiMsg)
     } catch (e) {
       const detail =
         e.response?.data?.detail ||
@@ -56,16 +54,13 @@ export default function Chat() {
         e.message ||
         '网络错误，请稍后重试。'
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'ai',
-          content: `⚠️ ${detail}`,
-          timestamp: new Date().toLocaleTimeString(),
-        },
-      ])
+      addChatMessage({
+        role: 'ai',
+        content: `⚠️ ${detail}`,
+        timestamp: new Date().toLocaleTimeString(),
+      })
     } finally {
-      setLoading(false)
+      setChatLoading(false)
     }
   }
 
