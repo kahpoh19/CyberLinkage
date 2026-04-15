@@ -4,7 +4,7 @@ import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, 
 import {
   DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
   NodeIndexOutlined, RobotOutlined, LogoutOutlined,
-  SunOutlined, MoonOutlined,BookOutlined
+  SunOutlined, MoonOutlined,BookOutlined,ToolOutlined
 } from '@ant-design/icons'
 
 
@@ -16,6 +16,7 @@ import Chat from './pages/Chat'
 import TeacherUpload from './pages/TeacherUpload'
 import useUserStore from './store/userStore'
 import { login, register, getMe } from './api'
+import Sandbox from './pages/Sandbox'
 
 const { Sider, Content, Header } = Layout
 const { Title } = Typography
@@ -27,6 +28,7 @@ const menuItems = [
   { key: '/path', icon: <NodeIndexOutlined />, label: '学习路径' },
   { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
   { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
+  { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
 ]
 
 const DISCO_COLORS = [
@@ -305,6 +307,7 @@ export default function App() {
             <Route path="/path" element={<LearningPath />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/teacher" element={<TeacherUpload />} />
+            <Route path="/sandbox" element={<Sandbox />} />
           </Routes>
         </Content>
       </Layout>
