@@ -1,10 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, Input, message, Radio, Tag } from 'antd'
+import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown } from 'antd'
 import {
   DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
   NodeIndexOutlined, RobotOutlined, LogoutOutlined,
-  SunOutlined, MoonOutlined, DesktopOutlined, BookOutlined, ToolOutlined
+  SunOutlined, MoonOutlined, SyncOutlined, BookOutlined, ToolOutlined
 } from '@ant-design/icons'
 
 
@@ -163,19 +163,64 @@ export default function App() {
     toggleTheme()
   }
 
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
+
   const currentThemeLabel = theme === 'auto'
     ? `Auto（当前 ${isDark ? 'Dark' : 'Light'}）`
     : theme === 'light'
       ? 'Light'
       : 'Dark'
   const nextThemeLabel = theme === 'auto' ? 'Light' : theme === 'light' ? 'Dark' : 'Auto'
+  const themeButtonTitle = discoMode
+    ? 'DISCO!'
+    : `${currentThemeLabel}，点击切换到 ${nextThemeLabel}，长按开启 DISCO MODE`
   const themeButtonIcon = discoMode
     ? <span style={{ fontSize: 18 }}>🪩</span>
     : theme === 'auto'
-      ? <DesktopOutlined style={{ fontSize: 18, color: '#1677ff' }} />
+      ? <SyncOutlined style={{ fontSize: 18, color: '#1677ff' }} />
       : theme === 'light'
         ? <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
         : <MoonOutlined style={{ fontSize: 18, color: '#f0f0f0' }} />
+  const headerIconButtonStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    lineHeight: 1,
+    padding: 0,
+    borderRadius: '50%',
+  }
+  const headerActionsStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    lineHeight: 1,
+  }
+  const userMenuItems = [
+    {
+      key: 'profile',
+      disabled: true,
+      label: (
+        <div style={{ minWidth: 120, lineHeight: 1.4 }}>
+          <div style={{ fontWeight: 600 }}>{user?.username || 'User'}</div>
+          <div style={{ fontSize: 12, color: '#8c8c8c' }}>
+            {user?.role === 'teacher' ? 'Teacher' : 'Student'}
+          </div>
+        </div>
+      ),
+    },
+    { type: 'divider' },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '退出登录',
+    },
+  ]
 
   return (
     <Layout style={{ minHeight: '100vh', position: 'relative' }}>
@@ -281,52 +326,68 @@ export default function App() {
           zIndex: 10,
           height: 'auto',
           minHeight: 64,
+          lineHeight: 1,
         }}>
           <Title level={5} style={{ margin: 0, lineHeight: 1.3 }}>
             基于知识图谱的个性化学习伴侣
           </Title>
-          <Space wrap>
-            <Tooltip title={discoMode ? '🕺 DISCO!' : `${currentThemeLabel}，点击切换到 ${nextThemeLabel}，长按开启 DISCO MODE`}>
-              <Button
-                type="text"
-                shape="circle"
-                onMouseDown={handleThemePressStart}
-                onMouseUp={handleThemePressEnd}
-                onMouseLeave={handleThemePressEnd}
-                onTouchStart={handleThemePressStart}
-                onTouchEnd={handleThemePressEnd}
-                onClick={handleThemeClick}
-                icon={
-                  <span className="disco-btn-icon">
-                    {themeButtonIcon}
-                  </span>
-                }
-                style={{
-                  transition: 'transform 0.3s ease',
-                  transform: discoMode ? 'rotate(12deg)' : 'rotate(0deg)',
-                  outline: discoMode ? '2px solid #ff0080' : 'none',
-                  borderRadius: '50%',
-                }}
-              />
-            </Tooltip>
+          <div style={headerActionsStyle}>
+            <Button
+              type="text"
+              shape="circle"
+              title={themeButtonTitle}
+              aria-label={themeButtonTitle}
+              onMouseDown={handleThemePressStart}
+              onMouseUp={handleThemePressEnd}
+              onMouseLeave={handleThemePressEnd}
+              onTouchStart={handleThemePressStart}
+              onTouchEnd={handleThemePressEnd}
+              onClick={handleThemeClick}
+              icon={
+                <span className="disco-btn-icon">
+                  {themeButtonIcon}
+                </span>
+              }
+              style={{
+                ...headerIconButtonStyle,
+                transition: 'transform 0.3s ease',
+                transform: discoMode ? 'rotate(12deg)' : 'rotate(0deg)',
+                outline: discoMode ? '2px solid #ff0080' : 'none',
+              }}
+            />
 
             {isAuthenticated() ? (
               <>
                 {user?.role === 'teacher' && (
-                    <Tag color="blue" style={{ margin: 0 }}>
+                    <Tag color="blue" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', height: 24 }}>
                       👨‍🏫 Teacher Mode
                     </Tag>
                 )}
-                <Avatar style={{ backgroundColor: discoMode ? '#ff0080' : '#1677ff', transition: 'background 0.15s' }}>
-                  {user?.username?.[0]?.toUpperCase() || 'U'}
-                </Avatar>
-                <span>{user?.username}</span>
-                <Button type="text" icon={<LogoutOutlined />} onClick={() => { logout(); navigate('/') }} />
+                <Dropdown
+                  trigger={['click']}
+                  menu={{
+                    items: userMenuItems,
+                    onClick: ({ key }) => {
+                      if (key === 'logout') handleLogout()
+                    },
+                  }}
+                >
+                  <Avatar
+                    style={{
+                      backgroundColor: discoMode ? '#ff0080' : '#1677ff',
+                      transition: 'background 0.15s',
+                      flex: '0 0 auto',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {user?.username?.[0]?.toUpperCase() || 'U'}
+                  </Avatar>
+                </Dropdown>
               </>
             ) : (
               <Button type="primary" onClick={openAuthModal}>登录</Button>
             )}
-          </Space>
+          </div>
         </Header>
 
         <Content style={{ margin: '24px', minHeight: 280 }}>
