@@ -7,6 +7,7 @@ import {
   LeftOutlined, TrophyOutlined, ReloadOutlined, NodeIndexOutlined
 } from '@ant-design/icons'
 import { startDiagnosis, submitDiagnosis } from '../api'
+import useUserStore from '../store/userStore'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -18,9 +19,16 @@ function DiffBadge({ difficulty }) {
 }
 
 // ── Single question card ────────────────────────────────────────
-function QuestionCard({ exercise, answer, onAnswer, index, total }) {
+function QuestionCard({ exercise, answer, onAnswer, index, total, isDark }) {
   const options = exercise?.options || {}
   const progress = Math.round(((index) / total) * 100)
+  const questionColor = isDark ? '#f0f0f0' : '#1a1a1a'
+  const optionColor = isDark ? '#f0f0f0' : '#1a1a1a'
+  const optionMutedColor = isDark ? '#bfbfbf' : '#666'
+  const cardBorder = isDark ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(22,119,255,0.12)'
+  const optionBorder = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'
+  const optionBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.015)'
+  const selectedBg = isDark ? 'rgba(22,119,255,0.18)' : 'rgba(22,119,255,0.05)'
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -36,7 +44,7 @@ function QuestionCard({ exercise, answer, onAnswer, index, total }) {
           percent={progress}
           showInfo={false}
           strokeColor={{ '0%': '#1677ff', '100%': '#52c41a' }}
-          trailColor="rgba(0,0,0,0.06)"
+          trailColor={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)'}
           size={['100%', 6]}
         />
       </div>
@@ -45,7 +53,7 @@ function QuestionCard({ exercise, answer, onAnswer, index, total }) {
         style={{
           borderRadius: 16,
           boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-          border: '1px solid rgba(22,119,255,0.12)',
+          border: cardBorder,
         }}
         bodyStyle={{ padding: '28px 32px' }}
       >
@@ -58,7 +66,7 @@ function QuestionCard({ exercise, answer, onAnswer, index, total }) {
         {/* Question text */}
         <div style={{
           fontSize: 16, fontWeight: 600, lineHeight: 1.7,
-          marginBottom: 28, whiteSpace: 'pre-wrap', color: '#1a1a1a'
+          marginBottom: 28, whiteSpace: 'pre-wrap', color: questionColor
         }}>
           {exercise.question_text}
         </div>
@@ -81,16 +89,16 @@ function QuestionCard({ exercise, answer, onAnswer, index, total }) {
                     alignItems: 'flex-start',
                     padding: '12px 16px',
                     borderRadius: 10,
-                    border: `1.5px solid ${selected ? '#1677ff' : 'rgba(0,0,0,0.10)'}`,
-                    background: selected ? 'rgba(22,119,255,0.05)' : 'rgba(0,0,0,0.015)',
+                    border: `1.5px solid ${selected ? '#1677ff' : optionBorder}`,
+                    background: selected ? selectedBg : optionBg,
                     transition: 'all 0.18s ease',
                     cursor: 'pointer',
                     margin: 0,
                     width: '100%',
                   }}
                 >
-                  <span>
-                    <Text strong style={{ color: selected ? '#1677ff' : '#666', marginRight: 8 }}>
+                  <span style={{ color: optionColor }}>
+                    <Text strong style={{ color: selected ? '#1677ff' : optionMutedColor, marginRight: 8 }}>
                       {key}.
                     </Text>
                     {value}
@@ -106,11 +114,17 @@ function QuestionCard({ exercise, answer, onAnswer, index, total }) {
 }
 
 // ── Result review card (per question) ──────────────────────────
-function ReviewCard({ exercise, userAnswer, index }) {
+function ReviewCard({ exercise, userAnswer, index, isDark }) {
   const correct = exercise.correct_answer
   const isCorrect = userAnswer?.toUpperCase() === correct?.toUpperCase()
   const options = exercise?.options || {}
   const skipped = !userAnswer
+  const neutralText = isDark ? '#d9d9d9' : '#444'
+  const mutedText = isDark ? '#bfbfbf' : '#888'
+  const cardBg = isCorrect
+    ? isDark ? 'rgba(82,196,26,0.08)' : 'rgba(82,196,26,0.02)'
+    : isDark ? 'rgba(255,77,79,0.08)' : 'rgba(255,77,79,0.02)'
+  const defaultOptionBorder = isDark ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.06)'
 
   return (
     <Card
@@ -118,7 +132,7 @@ function ReviewCard({ exercise, userAnswer, index }) {
         borderRadius: 14,
         marginBottom: 16,
         border: `1.5px solid ${isCorrect ? 'rgba(82,196,26,0.3)' : 'rgba(255,77,79,0.3)'}`,
-        background: isCorrect ? 'rgba(82,196,26,0.02)' : 'rgba(255,77,79,0.02)',
+        background: cardBg,
         boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
       }}
       bodyStyle={{ padding: '20px 24px' }}
@@ -147,15 +161,15 @@ function ReviewCard({ exercise, userAnswer, index }) {
           const isUserOpt = key === userAnswer
 
           let bg = 'transparent'
-          let border = '1px solid rgba(0,0,0,0.06)'
-          let textColor = '#444'
+          let border = defaultOptionBorder
+          let textColor = neutralText
 
           if (isCorrectOpt) {
-            bg = 'rgba(82,196,26,0.10)'
+            bg = isDark ? 'rgba(82,196,26,0.16)' : 'rgba(82,196,26,0.10)'
             border = '1px solid rgba(82,196,26,0.40)'
             textColor = '#389e0d'
           } else if (isUserOpt && !isCorrect) {
-            bg = 'rgba(255,77,79,0.08)'
+            bg = isDark ? 'rgba(255,77,79,0.16)' : 'rgba(255,77,79,0.08)'
             border = '1px solid rgba(255,77,79,0.35)'
             textColor = '#cf1322'
           }
@@ -169,7 +183,7 @@ function ReviewCard({ exercise, userAnswer, index }) {
                 display: 'flex', alignItems: 'center', gap: 8,
               }}
             >
-              <Text strong style={{ color: isCorrectOpt ? '#52c41a' : isUserOpt && !isCorrect ? '#ff4d4f' : '#888', minWidth: 18 }}>
+              <Text strong style={{ color: isCorrectOpt ? '#52c41a' : isUserOpt && !isCorrect ? '#ff4d4f' : mutedText, minWidth: 18 }}>
                 {key}.
               </Text>
               <Text style={{ color: textColor, flex: 1 }}>{value}</Text>
@@ -184,28 +198,29 @@ function ReviewCard({ exercise, userAnswer, index }) {
         })}
       </div>
 
-      {/* Explanation — always show for wrong answers, optional for correct */}
-      {exercise.explanation && (
-        <div style={{
-          marginTop: 12,
-          padding: '10px 14px',
-          borderRadius: 8,
-          background: isCorrect ? 'rgba(22,119,255,0.04)' : 'rgba(250,173,20,0.08)',
-          border: `1px solid ${isCorrect ? 'rgba(22,119,255,0.12)' : 'rgba(250,173,20,0.25)'}`,
-        }}>
-          <Text style={{ fontSize: 13, color: '#555' }}>
-            <Text strong style={{ color: isCorrect ? '#1677ff' : '#d46b08' }}>
-              💡 解析：
-            </Text>
-            {exercise.explanation}
+      {/* Explanation */}
+      <div style={{
+        marginTop: 12,
+        padding: '10px 14px',
+        borderRadius: 8,
+        background: isCorrect
+          ? isDark ? 'rgba(22,119,255,0.12)' : 'rgba(22,119,255,0.04)'
+          : isDark ? 'rgba(250,173,20,0.14)' : 'rgba(250,173,20,0.08)',
+        border: `1px solid ${isCorrect ? 'rgba(22,119,255,0.12)' : 'rgba(250,173,20,0.25)'}`,
+      }}>
+        <Text style={{ fontSize: 13, color: isDark ? '#d9d9d9' : '#555' }}>
+          <Text strong style={{ color: isCorrect ? '#1677ff' : '#d46b08' }}>
+            💡 解析：
           </Text>
-        </div>
-      )}
+          {exercise.explanation || '暂无解析'}
+        </Text>
+      </div>
 
       {skipped && (
         <div style={{
           marginTop: 8, padding: '8px 12px', borderRadius: 8,
-          background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
+          background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+          border: isDark ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.08)',
         }}>
           <Text type="secondary" style={{ fontSize: 13 }}>⚠️ 此题未作答</Text>
         </div>
@@ -216,6 +231,7 @@ function ReviewCard({ exercise, userAnswer, index }) {
 
 // ── Main Diagnosis page ─────────────────────────────────────────
 export default function Diagnosis() {
+  const isDark = useUserStore((s) => s.resolvedTheme === 'dark')
   const [phase, setPhase] = useState('start')   // start | testing | result
   const [exercises, setExercises] = useState([])
   const [current, setCurrent] = useState(0)
@@ -270,7 +286,7 @@ export default function Diagnosis() {
       // Attach exercises to result for review
       setResult({
         ...res.data,
-        exercises: exercises,
+        exercises: res.data.exercises || exercises,
         answers: { ...answers },
       })
       setPhase('result')
@@ -372,6 +388,7 @@ export default function Diagnosis() {
             onAnswer={handleAnswer}
             index={current}
             total={exercises.length}
+            isDark={isDark}
           />
         )}
 
@@ -557,6 +574,7 @@ export default function Diagnosis() {
                 exercise={ex}
                 userAnswer={ans[ex.id]}
                 index={exList.indexOf(ex)}
+                isDark={isDark}
               />
             ))}
           </div>
@@ -577,6 +595,7 @@ export default function Diagnosis() {
                 exercise={ex}
                 userAnswer={ans[ex.id]}
                 index={exList.indexOf(ex)}
+                isDark={isDark}
               />
             ))}
           </div>

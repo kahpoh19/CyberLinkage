@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -40,6 +40,11 @@ class ExerciseOut(BaseModel):
         from_attributes = True
 
 
+class ExerciseReviewOut(ExerciseOut):
+    correct_answer: str
+    explanation: Optional[str] = None
+
+
 class AnswerItem(BaseModel):
     exercise_id: int
     answer: str  # "A", "B", "C", "D"
@@ -55,6 +60,7 @@ class DiagnosisResult(BaseModel):
     accuracy: float
     mastery_map: Dict[str, float]
     weak_points: List[str]
+    exercises: List[ExerciseReviewOut] = Field(default_factory=list)
 
 
 # ─── 路由 ───────────────────────────────────────────────
@@ -143,12 +149,14 @@ def submit_diagnosis(
     """提交诊断答案，更新 BKT 掌握概率"""
     correct_count = 0
     kp_responses: Dict[str, List[bool]] = {}
+    review_exercises: List[Exercise] = []
 
     for item in req.answers:
         exercise = db.query(Exercise).filter(Exercise.id == item.exercise_id).first()
         if not exercise:
             continue
 
+        review_exercises.append(exercise)
         is_correct = item.answer.upper() == exercise.correct_answer.upper()
         if is_correct:
             correct_count += 1
@@ -203,4 +211,5 @@ def submit_diagnosis(
         accuracy=round(accuracy, 4),
         mastery_map=mastery_map,
         weak_points=weak_points,
+        exercises=review_exercises,
     )
