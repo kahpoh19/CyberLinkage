@@ -2,6 +2,35 @@
 
 import os
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+ENV_FILE = os.path.join(PROJECT_ROOT, ".env")
+
+
+def _load_env_file(path: str):
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        if not os.path.exists(path):
+            return
+
+        with open(path, encoding="utf-8") as env_file:
+            for line in env_file:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
+                    continue
+
+                key, value = stripped.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip("'\"")
+                if key:
+                    os.environ.setdefault(key, value)
+        return
+
+    load_dotenv(path)
+
+
+_load_env_file(ENV_FILE)
+
 
 class Settings:
     # 数据库
