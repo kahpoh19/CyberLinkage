@@ -36,6 +36,9 @@ export default function Profile() {
     const [documents, setDocuments] = useState([])
     const [progress, setProgress] = useState([])
     const [selectedRowKeys, setSelectedRowKeys] = useState([])
+    const allDocumentIds = documents.map((doc) => doc.id)
+    const selectedCount = selectedRowKeys.length
+    const allSelected = documents.length > 0 && selectedCount === documents.length
 
     const [profileForm] = Form.useForm()
 
@@ -206,6 +209,14 @@ export default function Profile() {
             message.success('删除成功')
         } catch {
             message.error('删除失败')
+        }
+    }
+
+    const handleSelectAllDocuments = () => {
+        if (allSelected) {
+            setSelectedRowKeys([])
+        } else {
+            setSelectedRowKeys(allDocumentIds)
         }
     }
 
@@ -397,6 +408,10 @@ export default function Profile() {
                         }
                     >
                         <Space style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+                            <Button onClick={handleSelectAllDocuments}>
+                                {allSelected ? '取消全选' : '全选全部文件'}
+                            </Button>
+
                             <Button
                                 icon={<EyeOutlined />}
                                 onClick={handleBatchPreview}
@@ -404,6 +419,7 @@ export default function Profile() {
                             >
                                 预览选中
                             </Button>
+
                             <Button
                                 icon={<DownloadOutlined />}
                                 onClick={handleBatchDownload}
@@ -411,6 +427,7 @@ export default function Profile() {
                             >
                                 下载选中
                             </Button>
+
                             <Popconfirm
                                 title="确认删除所选文件？"
                                 onConfirm={handleBatchDelete}
