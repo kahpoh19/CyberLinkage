@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown } from 'antd'
 import {
   DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
@@ -35,6 +35,20 @@ const DISCO_COLORS = [
   '#ff0080', '#ff4500', '#ffd700', '#00ff88',
   '#00cfff', '#bf00ff', '#ff69b4', '#ff6600',
 ]
+
+function TeacherOnlyRoute({ children }) {
+  const { user, isAuthenticated } = useUserStore()
+
+  if (isAuthenticated() && !user) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: 100 }}>
+        正在验证身份...
+      </div>
+    )
+  }
+
+  return user?.role === 'teacher' ? children : <Navigate to="/" replace />
+}
 
 // ── Auth Modal (lifted here so both header button and Dashboard can open it) ──
 function AuthModal() {
@@ -109,6 +123,7 @@ export default function App() {
   const {
     user,
     logout,
+    setUser,
     isAuthenticated,
     theme,
     resolvedTheme,
@@ -123,6 +138,29 @@ export default function App() {
   const longPressTriggered = useRef(false)
   const discoIntervalRef = useRef(null)
   const overlayRef = useRef(null)
+  const hasToken = isAuthenticated()
+  const isTeacher = user?.role === 'teacher'
+  const visibleMenuItems = isTeacher
+    ? menuItems
+    : menuItems.filter((item) => item.key !== '/teacher')
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!hasToken || user) return undefined
+
+    getMe()
+      .then((res) => {
+        if (!cancelled) setUser(res.data)
+      })
+      .catch(() => {
+        if (!cancelled) logout()
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasToken, user, setUser, logout])
 
   // Disco color flash loop
   useEffect(() => {
@@ -307,7 +345,7 @@ export default function App() {
           mode="inline"
           theme={isDark ? 'dark' : 'light'}
           selectedKeys={[location.pathname]}
-          items={menuItems}
+          items={visibleMenuItems}
           onClick={({ key }) => navigate(key)}
         />
       </Sider>
@@ -397,7 +435,14 @@ export default function App() {
             <Route path="/graph" element={<KnowledgeGraph />} />
             <Route path="/path" element={<LearningPath />} />
             <Route path="/chat" element={<Chat />} />
-            <Route path="/teacher" element={<TeacherUpload />} />
+            <Route
+              path="/teacher"
+              element={(
+                <TeacherOnlyRoute>
+                  <TeacherUpload />
+                </TeacherOnlyRoute>
+              )}
+            />
             <Route path="/sandbox" element={<Sandbox />} />
           </Routes>
         </Content>
