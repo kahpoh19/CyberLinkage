@@ -61,6 +61,7 @@ export const uploadAvatar = (file) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+export const deleteAvatar = () => api.delete('/profile/avatar')
 export const getDocuments = () => api.get('/profile/documents')
 export const uploadDocument = (file) => {
   const form = new FormData()

@@ -6,51 +6,26 @@ import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import useUserStore from './store/userStore'
 
-const savedFontSize = localStorage.getItem('cyberlinkage_font_size')
-const savedFontFamily = localStorage.getItem('cyberlinkage_font_family')
-if (savedFontSize) document.body.style.fontSize = `${savedFontSize}px`
-const fontMap = {
-  default: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
-  serif: 'Georgia, "Times New Roman", serif',
-  mono: '"Fira Code", "Courier New", monospace',
-}
-if (savedFontFamily) document.body.style.fontFamily = fontMap[savedFontFamily] || fontMap.default
-
 function Root() {
   const themeMode = useUserStore((s) => s.theme)
-  const resolvedTheme = useUserStore((s) => s.resolvedTheme)
-  const syncSystemTheme = useUserStore((s) => s.syncSystemTheme)
+  const fontSize = useUserStore((s) => s.fontSize)
+  const fontFamily = useUserStore((s) => s.fontFamily)
 
   useEffect(() => {
-    syncSystemTheme()
-
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = () => syncSystemTheme()
-
-    if (typeof media.addEventListener === 'function') {
-      media.addEventListener('change', handleChange)
-      return () => media.removeEventListener('change', handleChange)
-    }
-
-    media.addListener(handleChange)
-    return () => media.removeListener(handleChange)
-  }, [themeMode, syncSystemTheme])
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', resolvedTheme)
-    document.documentElement.style.colorScheme = resolvedTheme
-  }, [resolvedTheme])
+    document.body.style.minHeight = '100vh'
+    document.body.style.backgroundColor = themeMode === 'dark' ? '#141414' : '#f5f5f5'
+    document.body.style.color = themeMode === 'dark' ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.88)'
+    document.documentElement.style.colorScheme = themeMode === 'dark' ? 'dark' : 'light'
+  }, [themeMode])
 
   return (
     <ConfigProvider
       locale={zhCN}
       theme={{
-        algorithm: resolvedTheme === 'dark'
-          ? antTheme.darkAlgorithm
-          : antTheme.defaultAlgorithm,
-        token: { colorPrimary: '#1677ff' },
+        algorithm: themeMode === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+        token: {
+          colorPrimary: '#1677ff',
+        },
       }}
     >
       <BrowserRouter>

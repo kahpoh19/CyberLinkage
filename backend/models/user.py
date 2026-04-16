@@ -9,7 +9,7 @@ from database import Base
 
 
 class User(Base):
-    __tablename__ = "users" 
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
@@ -18,15 +18,12 @@ class User(Base):
     role = Column(String(10), default="student", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # ↓ 新增
     avatar = Column(String(255), nullable=True)
     display_name = Column(String(50), nullable=True)
-    font_size = Column(Integer, default=14)
-    font_family = Column(String(50), default="default")
 
     knowledge_states = relationship("KnowledgeState", back_populates="user")
     practice_records = relationship("PracticeRecord", back_populates="user")
-    documents = relationship("UserDocument", back_populates="user") 
+    documents = relationship("UserDocument", back_populates="user")
 
 
 class KnowledgeState(Base):
@@ -36,12 +33,13 @@ class KnowledgeState(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     knowledge_point_id = Column(String(50), nullable=False, index=True)
-    mastery_probability = Column(Float, default=0.3)  # P(mastery), BKT 初始值
+    mastery_probability = Column(Float, default=0.3)
     attempt_count = Column(Integer, default=0)
     correct_count = Column(Integer, default=0)
     last_practiced = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="knowledge_states")
+
 
 class UserDocument(Base):
     __tablename__ = "user_documents"

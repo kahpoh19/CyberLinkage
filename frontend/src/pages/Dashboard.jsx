@@ -6,28 +6,37 @@ import FireOutlined from '@ant-design/icons/es/icons/FireOutlined'
 import TrophyOutlined from '@ant-design/icons/es/icons/TrophyOutlined'
 import RadarChart from '../components/RadarChart'
 import useUserStore from '../store/userStore'
-import { getReport, getProgress, getMe } from '../api'
+import { getReport, getProgress, getProfile } from '../api'
+import { getDisplayName } from '../utils/user'
 
 const { Title, Paragraph } = Typography
 
 export default function Dashboard() {
-  const { user, isAuthenticated, setUser, openAuthModal } = useUserStore()
+  const {
+    user,
+    token,
+    isAuthenticated,
+    setUser,
+    openAuthModal,
+  } = useUserStore()
+
   const [summary, setSummary] = useState(null)
   const [progress, setProgress] = useState([])
 
   useEffect(() => {
-    if (isAuthenticated()) {
+    if (token) {
       loadData()
     }
-  }, [user])
+  }, [token])
 
   const loadData = async () => {
     try {
       const [sumRes, progRes, meRes] = await Promise.all([
         getReport(),
         getProgress(),
-        getMe(),
+        getProfile(),
       ])
+
       setSummary(sumRes.data)
       setProgress(progRes.data)
       setUser(meRes.data)
@@ -52,7 +61,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <Title level={4}>👋 你好，{user?.username || '同学'}！</Title>
+      <Title level={4}>👋 你好，{getDisplayName(user)}！</Title>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>

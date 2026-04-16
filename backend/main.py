@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
 
 from database import engine, Base
 <<<<<<< HEAD
@@ -13,6 +14,31 @@ from routers import auth, diagnosis, graph, path, report, profile
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_user_profile_columns():
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    columns = {col["name"] for col in inspector.get_columns("users")}
+
+    with engine.begin() as conn:
+        if "theme" not in columns:
+          conn.execute(text("ALTER TABLE users ADD COLUMN theme VARCHAR(10) DEFAULT 'light'"))
+          columns.add("theme")
+
+        if "font_size" in columns:
+            conn.execute(text("UPDATE users SET font_size = 14 WHERE font_size IS NULL"))
+
+        if "font_family" in columns:
+            conn.execute(text("UPDATE users SET font_family = 'default' WHERE font_family IS NULL"))
+
+        if "theme" in columns:
+            conn.execute(text("UPDATE users SET theme = 'light' WHERE theme IS NULL"))
+
+
+ensure_user_profile_columns()
 
 app = FastAPI(
     title="CyberLinkage API",
@@ -36,9 +62,10 @@ app.include_router(diagnosis.router)
 app.include_router(graph.router)
 app.include_router(path.router)
 app.include_router(report.router)
-app.include_router(profile.router) 
+app.include_router(profile.router)
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 
 @app.get("/")
 def root():
