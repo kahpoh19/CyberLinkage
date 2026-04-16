@@ -1,9 +1,11 @@
 import React, { useMemo, useRef, useCallback, useState } from 'react'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from 'echarts-for-react/esm/core'
 import useUserStore from '../store/userStore'
 import { buildTreeData, getMasteryTokens } from '../utils/graphUtils'
 import { Button } from 'antd'
-import { ExpandOutlined, CompressOutlined } from '@ant-design/icons'
+import ExpandOutlined from '@ant-design/icons/es/icons/ExpandOutlined'
+import CompressOutlined from '@ant-design/icons/es/icons/CompressOutlined'
+import echarts from '../utils/echartsCore'
 
 export default function TreeGraph({ graphData, onNodeClick }) {
   const chartRef = useRef(null)
@@ -97,6 +99,7 @@ export default function TreeGraph({ graphData, onNodeClick }) {
       </Button>
 
       <ReactECharts
+        echarts={echarts}
         key = {isExpanded ? 'expanded' : 'collapsed'}
         ref={chartRef}
         option={option}

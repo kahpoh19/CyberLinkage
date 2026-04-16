@@ -1,11 +1,17 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown } from 'antd'
-import {
-  DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
-  NodeIndexOutlined, RobotOutlined, LogoutOutlined,
-  SunOutlined, MoonOutlined, SyncOutlined, BookOutlined, ToolOutlined
-} from '@ant-design/icons'
+import DashboardOutlined from '@ant-design/icons/es/icons/DashboardOutlined'
+import ExperimentOutlined from '@ant-design/icons/es/icons/ExperimentOutlined'
+import ApartmentOutlined from '@ant-design/icons/es/icons/ApartmentOutlined'
+import NodeIndexOutlined from '@ant-design/icons/es/icons/NodeIndexOutlined'
+import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
+import LogoutOutlined from '@ant-design/icons/es/icons/LogoutOutlined'
+import SunOutlined from '@ant-design/icons/es/icons/SunOutlined'
+import MoonOutlined from '@ant-design/icons/es/icons/MoonOutlined'
+import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
+import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
+import ToolOutlined from '@ant-design/icons/es/icons/ToolOutlined'
 
 
 import Dashboard from './pages/Dashboard'

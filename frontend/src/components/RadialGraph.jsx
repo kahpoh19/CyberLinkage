@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useCallback, useEffect } from 'react'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from 'echarts-for-react/esm/core'
 import useUserStore from '../store/userStore'
 import { getMasteryTokens } from '../utils/graphUtils'
+import echarts from '../utils/echartsCore'
 
 const CHAPTER_COLORS = [
   '#1677ff', '#13c2c2', '#52c41a', '#faad14', '#ff4d4f',
@@ -342,6 +343,7 @@ export default function RadialGraph({ graphData, onNodeClick }) {
         拖动画布 / 滚轮缩放 · 点击知识点查看详情
       </div>
       <ReactECharts
+        echarts={echarts}
         ref={chartRef}
         option={option}
         style={{ width: '100%', height: '100%' }}

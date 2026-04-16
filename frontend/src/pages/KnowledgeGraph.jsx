@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Drawer, Descriptions, Tag, Spin, Typography, Segmented, message, Empty } from 'antd'
-import { ApartmentOutlined, RadarChartOutlined } from '@ant-design/icons'
+import ApartmentOutlined from '@ant-design/icons/es/icons/ApartmentOutlined'
+import RadarChartOutlined from '@ant-design/icons/es/icons/RadarChartOutlined'
 import TreeGraph from '../components/TreeGraph'
 import RadialGraph from '../components/RadialGraph'
 import { getGraph } from '../api'

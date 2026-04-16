@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useEffect } from 'react'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from 'echarts-for-react/esm/core'
 import useUserStore from '../store/userStore'
 import { getMasteryTokens } from '../utils/graphUtils'
+import echarts from '../utils/echartsCore'
 
 /**
  * 知识图谱 — 每章独立子树，跨章节关联用彩色虚线
@@ -249,6 +250,7 @@ export default function GraphViewer({ nodes = [], edges = [], onNodeClick }) {
 
   return (
     <ReactECharts
+      echarts={echarts}
       ref={chartRef}
       option={option}
       style={{ width: '100%', height: '100%' }}

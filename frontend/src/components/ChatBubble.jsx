@@ -1,6 +1,7 @@
 import React from 'react'
 import { Avatar, Typography } from 'antd'
-import { UserOutlined, RobotOutlined } from '@ant-design/icons'
+import UserOutlined from '@ant-design/icons/es/icons/UserOutlined'
+import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
 
 const { Text } = Typography
 

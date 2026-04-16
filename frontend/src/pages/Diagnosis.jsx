@@ -2,10 +2,13 @@ import React, { useState } from 'react'
 import {
   Card, Button, Radio, Space, Progress, Result, Tag, Typography, message, Badge
 } from 'antd'
-import {
-  CheckCircleOutlined, CloseCircleOutlined, RightOutlined,
-  LeftOutlined, TrophyOutlined, ReloadOutlined, NodeIndexOutlined
-} from '@ant-design/icons'
+import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
+import CloseCircleOutlined from '@ant-design/icons/es/icons/CloseCircleOutlined'
+import RightOutlined from '@ant-design/icons/es/icons/RightOutlined'
+import LeftOutlined from '@ant-design/icons/es/icons/LeftOutlined'
+import TrophyOutlined from '@ant-design/icons/es/icons/TrophyOutlined'
+import ReloadOutlined from '@ant-design/icons/es/icons/ReloadOutlined'
+import NodeIndexOutlined from '@ant-design/icons/es/icons/NodeIndexOutlined'
 import { startDiagnosis, submitDiagnosis } from '../api'
 import useUserStore from '../store/userStore'
 

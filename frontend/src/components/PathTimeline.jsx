@@ -1,11 +1,9 @@
 import React from 'react'
 import { Timeline, Tag, Typography, Progress } from 'antd'
-import {
-  CheckCircleOutlined,
-  SyncOutlined,
-  LockOutlined,
-  ClockCircleOutlined,
-} from '@ant-design/icons'
+import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
+import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
+import LockOutlined from '@ant-design/icons/es/icons/LockOutlined'
+import ClockCircleOutlined from '@ant-design/icons/es/icons/ClockCircleOutlined'
 
 const { Text } = Typography
 

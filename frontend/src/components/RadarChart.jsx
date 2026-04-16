@@ -1,5 +1,6 @@
 import React from 'react'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from 'echarts-for-react/esm/core'
+import echarts from '../utils/echartsCore'
 
 /**
  * 掌握度雷达图组件
@@ -55,6 +56,7 @@ export default function RadarChart({ categories = [], values = [] }) {
 
   return (
     <ReactECharts
+      echarts={echarts}
       option={option}
       style={{ width: '100%', height: 320 }}
     />

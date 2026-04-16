@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Card, Input, Button, Switch, Typography, Space } from 'antd'
-import { SendOutlined, RobotOutlined } from '@ant-design/icons'
+import SendOutlined from '@ant-design/icons/es/icons/SendOutlined'
+import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
 import ChatBubble from '../components/ChatBubble'
 import { chatWithAI } from '../api'
 import useUserStore from '../store/userStore'

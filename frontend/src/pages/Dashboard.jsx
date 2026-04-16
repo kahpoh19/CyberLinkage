@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Col, Row, Statistic, Typography, Empty, Button } from 'antd'
-import {
-  BookOutlined,
-  CheckCircleOutlined,
-  FireOutlined,
-  TrophyOutlined,
-} from '@ant-design/icons'
+import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
+import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
+import FireOutlined from '@ant-design/icons/es/icons/FireOutlined'
+import TrophyOutlined from '@ant-design/icons/es/icons/TrophyOutlined'
 import RadarChart from '../components/RadarChart'
 import useUserStore from '../store/userStore'
 import { getReport, getProgress, getMe } from '../api'

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Spin, Empty, Typography, Statistic, Row, Col } from 'antd'
-import { ClockCircleOutlined, WarningOutlined } from '@ant-design/icons'
+import ClockCircleOutlined from '@ant-design/icons/es/icons/ClockCircleOutlined'
+import WarningOutlined from '@ant-design/icons/es/icons/WarningOutlined'
 import PathTimeline from '../components/PathTimeline'
 import { getPath } from '../api'
 
