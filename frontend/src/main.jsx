@@ -6,6 +6,16 @@ import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import useUserStore from './store/userStore'
 
+const savedFontSize = localStorage.getItem('cyberlinkage_font_size')
+const savedFontFamily = localStorage.getItem('cyberlinkage_font_family')
+if (savedFontSize) document.body.style.fontSize = `${savedFontSize}px`
+const fontMap = {
+  default: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+  serif: 'Georgia, "Times New Roman", serif',
+  mono: '"Fira Code", "Courier New", monospace',
+}
+if (savedFontFamily) document.body.style.fontFamily = fontMap[savedFontFamily] || fontMap.default
+
 function Root() {
   const themeMode = useUserStore((s) => s.theme)
   const resolvedTheme = useUserStore((s) => s.resolvedTheme)

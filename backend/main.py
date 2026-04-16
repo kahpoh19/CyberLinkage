@@ -2,9 +2,14 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from database import engine, Base
+<<<<<<< HEAD
 from routers import auth, chat, diagnosis, graph, path, report
+=======
+from routers import auth, diagnosis, graph, path, report, profile
+>>>>>>> 16d1217 (use remote App.jsx)
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -31,7 +36,9 @@ app.include_router(diagnosis.router)
 app.include_router(graph.router)
 app.include_router(path.router)
 app.include_router(report.router)
+app.include_router(profile.router) 
 
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 def root():

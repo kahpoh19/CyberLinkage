@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react'
+<<<<<<< HEAD
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown } from 'antd'
 import DashboardOutlined from '@ant-design/icons/es/icons/DashboardOutlined'
@@ -12,21 +13,34 @@ import MoonOutlined from '@ant-design/icons/es/icons/MoonOutlined'
 import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
 import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
 import ToolOutlined from '@ant-design/icons/es/icons/ToolOutlined'
-
+=======
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, Input, message, Radio, Tag } from 'antd'
+import {
+  DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
+  NodeIndexOutlined, RobotOutlined, LogoutOutlined,
+  SunOutlined, MoonOutlined,
+  TeamOutlined, BarChartOutlined, UserOutlined,
+} from '@ant-design/icons'
+>>>>>>> 16d1217 (use remote App.jsx)
 
 import Dashboard from './pages/Dashboard'
 import Diagnosis from './pages/Diagnosis'
 import KnowledgeGraph from './pages/KnowledgeGraph'
 import LearningPath from './pages/LearningPath'
 import Chat from './pages/Chat'
-import TeacherUpload from './pages/TeacherUpload'
 import useUserStore from './store/userStore'
 import { login, register, getMe } from './api'
+<<<<<<< HEAD
 import Sandbox from './pages/Sandbox'
+=======
+import Profile from './pages/Profile'
+>>>>>>> 16d1217 (use remote App.jsx)
 
 const { Sider, Content, Header } = Layout
 const { Title } = Typography
 
+<<<<<<< HEAD
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
   { key: '/diagnosis', icon: <ExperimentOutlined />, label: '诊断测评' },
@@ -37,11 +51,14 @@ const menuItems = [
   { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
 ]
 
+=======
+>>>>>>> 16d1217 (use remote App.jsx)
 const DISCO_COLORS = [
   '#ff0080', '#ff4500', '#ffd700', '#00ff88',
   '#00cfff', '#bf00ff', '#ff69b4', '#ff6600',
 ]
 
+<<<<<<< HEAD
 function TeacherOnlyRoute({ children }) {
   const { user, isAuthenticated } = useUserStore()
 
@@ -57,10 +74,14 @@ function TeacherOnlyRoute({ children }) {
 }
 
 // ── Auth Modal (lifted here so both header button and Dashboard can open it) ──
+=======
+/* ---------------- Auth Modal ---------------- */
+>>>>>>> 16d1217 (use remote App.jsx)
 function AuthModal() {
   const { showAuthModal, closeAuthModal, login: storeLogin, setUser } = useUserStore()
   const [isRegister, setIsRegister] = useState(false)
   const [form] = Form.useForm()
+  const [discoMode, setDiscoMode] = useState(false)
 
   const handleClose = () => {
     form.resetFields()
@@ -83,31 +104,27 @@ function AuthModal() {
   }
 
   return (
-    <Modal
-      title={isRegister ? '注册' : '登录'}
-      open={showAuthModal}
-      onCancel={handleClose}
-      footer={null}
-      destroyOnClose
-    >
-      <Form form={form} onFinish={handleAuth} layout="vertical" style={{ marginTop: 8 }} initialValues={{ role: 'student' }}>
-        <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+    <Modal title={isRegister ? '注册' : '登录'} open={showAuthModal} onCancel={handleClose} footer={null}>
+      <Form form={form} onFinish={handleAuth} layout="vertical">
+        <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
           <Input />
         </Form.Item>
+
         {isRegister && (
-          <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
+          <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email' }]}>
             <Input />
           </Form.Item>
         )}
-        <Form.Item name="password" label="密码" rules={[{ required: true, min: 6, message: '密码至少6位' }]}>
+
+        <Form.Item name="password" label="密码" rules={[{ required: true, min: 6 }]}>
           <Input.Password />
         </Form.Item>
 
         {isRegister && (
           <Form.Item name="role" label="身份">
             <Radio.Group>
-              <Radio.Button value="student">👨‍🎓 学生 (Student)</Radio.Button>
-              <Radio.Button value="teacher">👨‍🏫 教师 (Teacher)</Radio.Button>
+              <Radio.Button value="student">学生</Radio.Button>
+              <Radio.Button value="teacher">教师</Radio.Button>
             </Radio.Group>
           </Form.Item>
         )}
@@ -115,17 +132,20 @@ function AuthModal() {
         <Button type="primary" htmlType="submit" block>
           {isRegister ? '注册' : '登录'}
         </Button>
-        <Button type="link" block onClick={() => { form.resetFields(); setIsRegister(!isRegister) }}>
-          {isRegister ? '已有账号？去登录' : '没有账号？去注册'}
+
+        <Button type="link" block onClick={() => setIsRegister(!isRegister)}>
+          {isRegister ? '去登录' : '去注册'}
         </Button>
       </Form>
     </Modal>
   )
 }
 
+/* ---------------- App ---------------- */
 export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
+<<<<<<< HEAD
   const {
     user,
     logout,
@@ -140,9 +160,21 @@ export default function App() {
   } = useUserStore()
 
   const isDark = resolvedTheme === 'dark'
+=======
+
+  const {
+    user, logout, isAuthenticated,
+    theme, toggleTheme,
+    discoMode, activateDisco
+  } = useUserStore()
+
+  const isDark = theme === 'dark'
+
+>>>>>>> 16d1217 (use remote App.jsx)
   const longPressTimer = useRef(null)
   const longPressTriggered = useRef(false)
   const discoIntervalRef = useRef(null)
+  const discoTimeoutRef = useRef(null)
   const overlayRef = useRef(null)
   const hasToken = isAuthenticated()
   const isTeacher = user?.role === 'teacher'
@@ -168,7 +200,7 @@ export default function App() {
     }
   }, [hasToken, user, setUser, logout])
 
-  // Disco color flash loop
+  /* ---------- Disco颜色 ---------- */
   useEffect(() => {
     if (discoMode) {
       let i = 0
@@ -179,15 +211,81 @@ export default function App() {
         }
         i++
       }, 150)
+
+      // ✅ 10秒自动关闭
+      discoTimeoutRef.current = setTimeout(() => {
+        useUserStore.getState().deactivateDisco()
+      }, 10000)
+
     } else {
       clearInterval(discoIntervalRef.current)
+      clearTimeout(discoTimeoutRef.current)
       if (overlayRef.current) overlayRef.current.style.opacity = '0'
     }
-    return () => clearInterval(discoIntervalRef.current)
+
+    return () => {
+      clearInterval(discoIntervalRef.current)
+      clearTimeout(discoTimeoutRef.current)
+    }
   }, [discoMode])
 
+<<<<<<< HEAD
   const handleThemePressStart = () => {
     longPressTriggered.current = false
+=======
+  useEffect(() => {
+    const exit = (e) => {
+      if (e.key === 'Escape' || e.type === 'click') {
+        setDiscoMode(false)
+      }
+    }
+
+    if (discoMode) {
+      window.addEventListener('click', exit)
+      window.addEventListener('keydown', exit)
+    }
+
+    return () => {
+      window.removeEventListener('click', exit)
+      window.removeEventListener('keydown', exit)
+    }
+  }, [discoMode])
+
+  useEffect(() => {
+    const exitDisco = (e) => {
+      // 点击任何地方 或 按ESC
+      if (e.type === 'click' || e.key === 'Escape') {
+        setDiscoMode(false)
+      }
+    }
+
+    if (discoMode) {
+      window.addEventListener('click', exitDisco)
+      window.addEventListener('keydown', exitDisco)
+    }
+
+    return () => {
+      window.removeEventListener('click', exitDisco)
+      window.removeEventListener('keydown', exitDisco)
+    }
+  }, [discoMode])
+
+  useEffect(() => {
+    const size = localStorage.getItem('fontSize')
+    const font = localStorage.getItem('fontFamily')
+
+    if (size) {
+      document.documentElement.style.setProperty('--font-size', size + 'px')
+    }
+    if (font) {
+      document.documentElement.style.setProperty('--font-family', font)
+    }
+  }, [])
+  
+  /* ---------- 长按触发 ---------- */
+  const handlePressStart = () => {
+    if (discoMode) return
+>>>>>>> 16d1217 (use remote App.jsx)
     longPressTimer.current = setTimeout(() => {
       longPressTriggered.current = true
       activateDisco()
@@ -198,6 +296,7 @@ export default function App() {
     clearTimeout(longPressTimer.current)
   }
 
+<<<<<<< HEAD
   const handleThemeClick = () => {
     clearTimeout(longPressTimer.current)
     if (longPressTriggered.current) {
@@ -266,97 +365,76 @@ export default function App() {
     },
   ]
 
+=======
+>>>>>>> 16d1217 (use remote App.jsx)
   return (
     <Layout style={{ minHeight: '100vh', position: 'relative' }}>
 
-      {/* Disco overlay */}
+      {/* 背景闪光 */}
       <div
         ref={overlayRef}
         style={{
-          position: 'fixed', inset: 0,
+          position: 'fixed',
+          inset: 0,
           opacity: 0,
-          pointerEvents: discoMode ? 'auto' : 'none',
+          pointerEvents: 'none',
           zIndex: 9999,
-          transition: 'background 0.12s ease, opacity 0.3s ease',
-          mixBlendMode: 'screen',
-          cursor: discoMode ? 'pointer' : 'default',
-        }}
-        onClick={() => {
-          if (discoMode) useUserStore.getState().deactivateDisco()
+          mixBlendMode: 'screen'
         }}
       />
 
+      {/* 顶部提示 */}
       {discoMode && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0,
-          zIndex: 10000, textAlign: 'center',
-          padding: '6px 0',
-          background: 'linear-gradient(90deg,#ff0080,#ffd700,#00ff88,#00cfff,#bf00ff,#ff0080)',
-          backgroundSize: '200% 100%',
-          animation: 'discoSlide 1s linear infinite',
-          fontSize: 14, fontWeight: 600, color: '#fff',
-          letterSpacing: 4,
-          pointerEvents: 'none',
+          position: 'fixed',
+          top: 0,
+          width: '100%',
+          zIndex: 10000,
+          textAlign: 'center',
+          background: 'linear-gradient(90deg,#ff0080,#ffd700,#00ff88,#00cfff)',
+          color: '#fff'
         }}>
           🕺 DISCO MODE 🕺
         </div>
       )}
 
+      {/* 🎯 GIF 主动画 */}
       {discoMode && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9998,
-          pointerEvents: 'none',
-        }}>
-          <img
-            src="/disco.gif"
-            alt="disco"
-            style={{ width: 320, borderRadius: 16, opacity: 0.92 }}
-          />
-        </div>
+        <img
+          src={`/disco.gif?t=${Date.now()}`}
+          alt="disco"
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 260,
+            zIndex: 10001,
+            pointerEvents: 'none'
+          }}
+        />
       )}
 
-      <style>{`
-        @keyframes discoSlide {
-          0% { background-position: 0% 50%; }
-          100% { background-position: 200% 50%; }
-        }
-        @keyframes discoPulse {
-          0%, 100% { transform: scale(1) rotate(0deg); }
-          25% { transform: scale(1.3) rotate(-15deg); }
-          75% { transform: scale(1.3) rotate(15deg); }
-        }
-        .disco-btn-icon {
-          animation: ${discoMode ? 'discoPulse 0.4s ease-in-out infinite' : 'none'};
-          display: inline-flex;
-        }
-      `}</style>
-
-      <Sider
-        breakpoint="lg"
-        collapsedWidth="80"
-        theme={isDark ? 'dark' : 'light'}
-        style={discoMode ? { filter: 'hue-rotate(var(--disco-hue, 0deg))' } : {}}
-      >
-        <div style={{ padding: '16px', textAlign: 'center' }}>
-          <Title level={4} style={{ margin: 0, color: discoMode ? '#ff0080' : '#1677ff', transition: 'color 0.15s' }}>
-            {discoMode ? '🕺 CyberLinkage' : '🧠 CyberLinkage'}
-          </Title>
-        </div>
+      <Sider theme={isDark ? 'dark' : 'light'}>
         <Menu
-          mode="inline"
-          theme={isDark ? 'dark' : 'light'}
           selectedKeys={[location.pathname]}
+<<<<<<< HEAD
           items={visibleMenuItems}
+=======
+>>>>>>> 16d1217 (use remote App.jsx)
           onClick={({ key }) => navigate(key)}
+          items={[
+            { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+            { key: '/graph', icon: <ApartmentOutlined />, label: '知识图谱' },
+            { key: '/diagnosis', icon: <ExperimentOutlined />, label: '诊断测评' },
+            { key: '/learning', icon: <NodeIndexOutlined />, label: '学习路径' },
+            { key: '/profile', icon: <UserOutlined />, label: '个人中心' },
+          ]}
         />
       </Sider>
 
       <Layout>
+<<<<<<< HEAD
         <Header style={{
           background: isDark ? '#141414' : '#fff',
           padding: '0 24px',
@@ -398,10 +476,29 @@ export default function App() {
                 transform: discoMode ? 'rotate(12deg)' : 'rotate(0deg)',
                 outline: discoMode ? '2px solid #ff0080' : 'none',
               }}
+=======
+        <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Title level={5}>CyberLinkage</Title>
+
+          <Space>
+            <Button
+              shape="circle"
+              onMouseDown={handlePressStart}
+              onMouseUp={handlePressEnd}
+              onClick={toggleTheme}
+              icon={
+                discoMode
+                  ? <img src="/disco.gif" style={{ width: 20 }} />
+                  : isDark
+                    ? <SunOutlined />
+                    : <MoonOutlined />
+              }
+>>>>>>> 16d1217 (use remote App.jsx)
             />
 
             {isAuthenticated() ? (
               <>
+<<<<<<< HEAD
                 {user?.role === 'teacher' && (
                     <Tag color="blue" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', height: 24 }}>
                       👨‍🏫 Teacher Mode
@@ -427,18 +524,24 @@ export default function App() {
                     {user?.username?.[0]?.toUpperCase() || 'U'}
                   </Avatar>
                 </Dropdown>
+=======
+                <Avatar src={user?.avatar}>
+                  {!user?.avatar && user?.username?.[0]}
+                </Avatar>
+                <Button icon={<LogoutOutlined />} onClick={logout} />
+>>>>>>> 16d1217 (use remote App.jsx)
               </>
             ) : (
-              <Button type="primary" onClick={openAuthModal}>登录</Button>
+              <Button>登录</Button>
             )}
           </div>
         </Header>
 
-        <Content style={{ margin: '24px', minHeight: 280 }}>
+        <Content style={{ margin: 24 }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/diagnosis" element={<Diagnosis />} />
             <Route path="/graph" element={<KnowledgeGraph />} />
+<<<<<<< HEAD
             <Route path="/path" element={<LearningPath />} />
             <Route path="/chat" element={<Chat />} />
             <Route
@@ -450,11 +553,15 @@ export default function App() {
               )}
             />
             <Route path="/sandbox" element={<Sandbox />} />
+=======
+            <Route path="/diagnosis" element={<Diagnosis />} />
+            <Route path="/learning" element={<LearningPath />} />
+            <Route path="/profile" element={<Profile />} />
+>>>>>>> 16d1217 (use remote App.jsx)
           </Routes>
         </Content>
       </Layout>
 
-      {/* Single AuthModal instance for the whole app */}
       <AuthModal />
     </Layout>
   )
