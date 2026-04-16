@@ -5,12 +5,12 @@
 //   • releaseAt picker  — schedule a future publish time (Ant Design DatePicker)
 //   • Derived publish status: "published" | "scheduled" | "hidden"
 //   • useFileAccess hook re-exported at the bottom for student-side filtering
-//   • Dark-mode-safe DatePicker + Switch styling injected via <style>
+//   • Dark-mode-safe DatePicker + visibility toggle styling injected via <style>
 
 import React, {
   useState, useRef, useCallback, useEffect, useMemo,
 } from 'react'
-import { Switch, DatePicker, Tooltip } from 'antd'
+import { DatePicker, Tooltip, Select } from 'antd'
 import dayjs from 'dayjs'
 import useTeacherStore from '../store/teacherStore'
 
@@ -74,6 +74,26 @@ const fmtTs = ts =>
 const isValidFile = f =>
   ACCEPTED_EXT.some(e => f.name.toLowerCase().endsWith(e)) ||
   ACCEPTED_MIME.includes(f.type)
+
+const range = (start, end) =>
+  Array.from({ length: Math.max(end - start, 0) }, (_, i) => start + i)
+
+const disabledReleaseDate = current =>
+  current && current.isBefore(dayjs().startOf('day'))
+
+const disabledReleaseTime = current => {
+  const now = dayjs()
+  if (!current || !current.isSame(now, 'day')) return {}
+
+  return {
+    disabledHours: () => range(0, now.hour()),
+    disabledMinutes: selectedHour =>
+      selectedHour === now.hour() ? range(0, now.minute() + 1) : [],
+  }
+}
+
+const toFutureTimestamp = val =>
+  val && val.valueOf() > Date.now() ? val.valueOf() : null
 
 // ── Blob helpers ──────────────────────────────────────────────────
 function openBlob(url, name) {
@@ -186,6 +206,13 @@ Icons.Clock = ({ s = 12 }) => (
   </svg>
 )
 
+Icons.ChevronDown = ({ s = 14 }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+)
+
 // ════════════════════════════════════════════════════════════════
 // Theme CSS
 // ════════════════════════════════════════════════════════════════
@@ -269,17 +296,192 @@ const THEME_CSS = `
     background: var(--t-input-bg) !important;
     color: var(--t-text-sub) !important;
   }
+  .tu-release-picker.ant-picker {
+    min-width: 206px;
+    height: 38px;
+    padding: 0 12px;
+    border: 0.5px solid var(--t-border-acc) !important;
+    border-radius: 10px !important;
+    background: var(--t-input-bg) !important;
+    color: var(--t-text) !important;
+    box-shadow: none !important;
+    display: inline-flex;
+    align-items: center;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s !important;
+  }
+  .tu-release-picker.ant-picker:hover,
+  .tu-release-picker.ant-picker-focused {
+    border-color: rgba(168,85,247,0.58) !important;
+    box-shadow: 0 0 0 3px rgba(168,85,247,0.10) !important;
+  }
+  .tu-release-picker .ant-picker-input > input {
+    color: var(--t-text) !important;
+    font-size: 13px;
+  }
+  .tu-release-picker .ant-picker-input > input::placeholder {
+    color: var(--t-text-sub);
+  }
+  .tu-release-picker .ant-picker-suffix,
+  .tu-release-picker .ant-picker-separator,
+  .tu-release-picker .ant-picker-clear {
+    color: var(--t-text-sub) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-panel-container {
+    overflow: hidden;
+    border: 0.5px solid var(--t-border-acc);
+    border-radius: 14px;
+    background: var(--t-select-bg) !important;
+    box-shadow: 0 18px 44px rgba(15,23,42,0.18);
+    backdrop-filter: var(--t-blur);
+  }
+  [data-theme="dark"] .tu-release-picker-dropdown .ant-picker-panel-container {
+    box-shadow: 0 20px 50px rgba(0,0,0,0.46);
+  }
+  .tu-release-picker-dropdown .ant-picker-panel,
+  .tu-release-picker-dropdown .ant-picker-date-panel,
+  .tu-release-picker-dropdown .ant-picker-time-panel {
+    background: transparent !important;
+    border-color: var(--t-border) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-header {
+    border-bottom-color: var(--t-border) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-header,
+  .tu-release-picker-dropdown .ant-picker-header button,
+  .tu-release-picker-dropdown .ant-picker-content th {
+    color: var(--t-text) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-cell {
+    color: var(--t-text-sub) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-cell-in-view {
+    color: var(--t-text) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-cell-disabled {
+    color: rgba(100,116,139,0.42) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-cell-inner,
+  .tu-release-picker-dropdown .ant-picker-time-panel-cell-inner {
+    border-radius: 8px !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
+  .tu-release-picker-dropdown .ant-picker-time-panel-column > li.ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner {
+    background: rgba(168,85,247,0.18) !important;
+    color: #c084fc !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before {
+    border-color: rgba(14,165,233,0.70) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-cell-in-view:not(.ant-picker-cell-disabled):hover .ant-picker-cell-inner,
+  .tu-release-picker-dropdown .ant-picker-time-panel-column > li.ant-picker-time-panel-cell:hover .ant-picker-time-panel-cell-inner {
+    background: rgba(14,165,233,0.10) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-time-panel-column {
+    scrollbar-color: rgba(168,85,247,0.35) transparent;
+  }
+  .tu-release-picker-dropdown .ant-picker-time-panel-column::after {
+    height: 176px;
+  }
+  .tu-release-picker-dropdown .ant-picker-footer,
+  .tu-release-picker-dropdown .ant-picker-ranges {
+    border-top-color: var(--t-border) !important;
+  }
+  .tu-release-picker-dropdown .ant-picker-now-btn {
+    color: #0ea5e9 !important;
+  }
+  .tu-release-picker-dropdown .ant-btn-primary {
+    border-color: #a855f7 !important;
+    background: #a855f7 !important;
+    box-shadow: none !important;
+  }
 
-  /* Switch label text next to toggle */
+  .tu-subject-select .ant-select-selector {
+    width: 320px !important;
+    height: 40px !important;
+    padding: 4px 42px 4px 14px !important;
+    border-radius: 10px !important;
+    border: 0.5px solid var(--t-border-acc) !important;
+    background: var(--t-select-bg) !important;
+    color: var(--t-text) !important;
+    box-shadow: none !important;
+    display: flex;
+    align-items: center;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s !important;
+  }
+  .tu-subject-select .ant-select-selection-item {
+    color: var(--t-text) !important;
+    font-size: 13px;
+    line-height: 30px !important;
+  }
+  .tu-subject-select .ant-select-arrow {
+    inset-inline-end: 14px !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 18px;
+    height: 40px;
+    margin-top: 0 !important;
+    transform: none !important;
+    color: var(--t-text-sub) !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .tu-select-chevron {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    transform: translateY(1px);
+    transition: transform 0.16s ease;
+  }
+  .tu-subject-select.ant-select-open .tu-select-chevron {
+    transform: translateY(1px) rotate(180deg);
+  }
+  .tu-select-chevron svg {
+    display: block;
+  }
+  .tu-subject-popup {
+    padding: 6px !important;
+    border-radius: 12px !important;
+    border: 0.5px solid var(--t-border-acc);
+    background: var(--t-select-bg) !important;
+    backdrop-filter: var(--t-blur);
+  }
+  .tu-subject-popup .ant-select-item {
+    min-height: 34px;
+    border-radius: 8px;
+    color: var(--t-text);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+  }
+  .tu-subject-popup .ant-select-item-option-active {
+    background: rgba(168,85,247,0.10) !important;
+  }
+  .tu-subject-popup .ant-select-item-option-selected {
+    background: rgba(168,85,247,0.16) !important;
+    color: #c084fc !important;
+    font-weight: 500;
+  }
+  [data-theme="dark"] .tu-subject-popup {
+    box-shadow: 0 16px 36px rgba(0,0,0,0.42);
+  }
+
+  /* Visibility label text next to toggle */
   .tu-switch-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    width: 262px;
   }
   .tu-switch-label {
     font-size: 12px;
     color: var(--t-text-sub);
     white-space: nowrap;
+    width: 188px;
   }
 
   .teacher-upload-page,
@@ -289,14 +491,85 @@ const THEME_CSS = `
   .teacher-upload-page textarea {
     font-family: inherit;
   }
+
+  .tu-visibility-toggle {
+    width: 58px !important;
+    min-width: 58px !important;
+    max-width: 58px !important;
+    flex: 0 0 58px !important;
+    height: 26px !important;
+    min-height: 26px !important;
+    max-height: 26px !important;
+    line-height: 26px !important;
+    padding: 0 !important;
+    margin: 0;
+    border: 0 !important;
+    border-radius: 13px !important;
+    position: relative;
+    align-self: center;
+    vertical-align: middle;
+    aspect-ratio: auto !important;
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    cursor: pointer;
+    background: rgba(100,116,139,0.34);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    transition: background-color 0.15s, box-shadow 0.15s !important;
+  }
+  .tu-visibility-toggle.is-on {
+    background: #a855f7;
+  }
+  .tu-visibility-toggle:hover {
+    box-shadow: 0 0 0 3px rgba(168,85,247,0.10);
+  }
+  .tu-visibility-toggle:focus-visible {
+    outline: 2px solid rgba(14,165,233,0.72);
+    outline-offset: 2px;
+  }
+  .tu-visibility-toggle-text {
+    position: absolute;
+    inset: 0 8px 0 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    line-height: 26px;
+    pointer-events: none;
+  }
+  .tu-visibility-toggle.is-on .tu-visibility-toggle-text {
+    inset: 0 25px 0 8px;
+  }
+  .tu-visibility-toggle-thumb {
+    position: absolute;
+    top: 3px;
+    inset-inline-start: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(15,23,42,0.22);
+    transition: inset-inline-start 0.15s ease;
+  }
+  .tu-visibility-toggle.is-on .tu-visibility-toggle-thumb {
+    inset-inline-start: calc(100% - 23px);
+  }
 `
 
 function injectCSS() {
-  if (document.getElementById('tu-css')) return
-  const el = document.createElement('style')
-  el.id = 'tu-css'
-  el.textContent = THEME_CSS
-  document.head.appendChild(el)
+  let el = document.getElementById('tu-css')
+  if (!el) {
+    el = document.createElement('style')
+    el.id = 'tu-css'
+    document.head.appendChild(el)
+  }
+  if (el.textContent !== THEME_CSS) el.textContent = THEME_CSS
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -308,7 +581,7 @@ function Card({ accent = 'rgba(168,85,247,0.16)', mb = 20, children }) {
       background:     'var(--t-card)',
       border:         `0.5px solid ${accent}`,
       borderRadius:   16,
-      padding:        22,
+      padding:        '18px 22px 22px',
       backdropFilter: 'var(--t-blur)',
       WebkitBackdropFilter: 'var(--t-blur)',
       marginBottom:   mb,
@@ -321,12 +594,91 @@ function Card({ accent = 'rgba(168,85,247,0.16)', mb = 20, children }) {
 function SectionLabel({ children }) {
   return (
     <p style={{
-      fontSize: 10, fontWeight: 500, letterSpacing: '0.08em',
+      fontSize: 12, fontWeight: 600, letterSpacing: '0.05em',
       textTransform: 'uppercase', color: 'var(--t-text-sub)',
-      margin: '0 0 12px',
+      margin: '0 0 14px',
     }}>
       {children}
     </p>
+  )
+}
+
+function VisibilityToggle({ checked, onChange }) {
+  const toggle = () => onChange(!checked)
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={`tu-visibility-toggle${checked ? ' is-on' : ''}`}
+      onClick={toggle}
+      style={{
+        width: 58,
+        minWidth: 58,
+        maxWidth: 58,
+        flex: '0 0 58px',
+        height: 26,
+        minHeight: 26,
+        maxHeight: 26,
+        lineHeight: '26px',
+        padding: 0,
+        margin: 0,
+        border: 0,
+        borderRadius: 13,
+        position: 'relative',
+        alignSelf: 'center',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+        aspectRatio: 'auto',
+        cursor: 'pointer',
+        background: checked ? '#a855f7' : 'rgba(100,116,139,0.34)',
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: 600,
+        transition: 'background-color 0.15s, box-shadow 0.15s',
+        verticalAlign: 'middle',
+      }}
+    >
+      <span
+        className="tu-visibility-toggle-text"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: checked ? 25 : 8,
+          bottom: 0,
+          left: checked ? 8 : 25,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: 26,
+          lineHeight: '26px',
+          pointerEvents: 'none',
+        }}
+      >
+        {checked ? '可见' : '隐藏'}
+      </span>
+      <span
+        className="tu-visibility-toggle-thumb"
+        style={{
+          position: 'absolute',
+          top: 3,
+          insetInlineStart: checked ? 'calc(100% - 23px)' : 3,
+          width: 20,
+          height: 20,
+          borderRadius: '50%',
+          background: '#fff',
+          boxShadow: '0 1px 4px rgba(15,23,42,0.22)',
+          transition: 'inset-inline-start 0.15s ease',
+          pointerEvents: 'none',
+        }}
+      />
+    </button>
   )
 }
 
@@ -346,7 +698,7 @@ function ActionBtn({ onClick, disabled, title, hue, children }) {
       title={title}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+        width: 34, height: 28, borderRadius: 6, flexShrink: 0,
         background: c.bg, border: `0.5px solid ${c.border}`,
         color: c.color, cursor: 'pointer',
       }}
@@ -379,15 +731,15 @@ function PublishStatusBadge({ file }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      fontSize: 11, fontWeight: 500,
+      fontSize: 12, fontWeight: 500,
       color: cfg.color,
       background: cfg.bg,
       border: `0.5px solid ${cfg.border}`,
       borderRadius: 20, padding: '3px 9px', whiteSpace: 'nowrap',
     }}>
-      {status === 'published' && <Icons.Check s={11} />}
-      {status === 'scheduled' && <Icons.Clock s={11} />}
-      {status === 'hidden'    && <Icons.XIcon s={11} />}
+      {status === 'published' && <Icons.Check s={12} />}
+      {status === 'scheduled' && <Icons.Clock s={12} />}
+      {status === 'hidden'    && <Icons.XIcon s={12} />}
       {cfg.label}
     </span>
   )
@@ -404,15 +756,15 @@ function ParseStatusBadge({ status }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      fontSize: 11, fontWeight: 500, color,
+      fontSize: 12, fontWeight: 500, color,
       background: `color-mix(in srgb, ${color} 13%, transparent)`,
       border: `0.5px solid color-mix(in srgb, ${color} 35%, transparent)`,
       borderRadius: 20, padding: '3px 9px', whiteSpace: 'nowrap',
     }}>
       {cfg.spin
-        ? <Icons.Refresh s={11} cls="tu-spin" />
-        : status === 'done'  ? <Icons.Check s={11} />
-        : status === 'error' ? <Icons.XIcon s={11} />
+        ? <Icons.Refresh s={12} cls="tu-spin" />
+        : status === 'done'  ? <Icons.Check s={12} />
+        : status === 'error' ? <Icons.XIcon s={12} />
         : <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, display: 'inline-block' }} />
       }
       {cfg.label}
@@ -439,7 +791,7 @@ function SubjectTabs({ active, onChange, counts }) {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '6px 14px', borderRadius: 10,
-              fontSize: 12, fontWeight: isActive ? 500 : 400,
+              fontSize: 13, fontWeight: isActive ? 500 : 400,
               cursor: 'pointer',
               background:   isActive ? 'var(--t-tab-active)' : 'transparent',
               border:       isActive ? '0.5px solid rgba(168,85,247,0.45)' : '0.5px solid var(--t-border)',
@@ -455,7 +807,7 @@ function SubjectTabs({ active, onChange, counts }) {
                 background: isActive ? 'rgba(168,85,247,0.22)' : 'var(--t-border)',
                 color: isActive ? '#c084fc' : 'var(--t-text-sub)',
                 borderRadius: 20, padding: '1px 7px',
-                fontSize: 10, fontWeight: 500,
+                fontSize: 11, fontWeight: 500,
               }}>
                 {count}
               </span>
@@ -482,40 +834,35 @@ function DropZone({ selectedSubject, onSubjectChange, defaultVisible, onDefaultV
   return (
     <div>
       {/* Subject selector */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-sub)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>
           上传至科目
         </label>
-        <select
+        <Select
+          className="tu-subject-select"
+          popupClassName="tu-subject-popup"
+          suffixIcon={<span className="tu-select-chevron"><Icons.ChevronDown s={14} /></span>}
           value={selectedSubject}
-          onChange={e => onSubjectChange(e.target.value)}
+          onChange={onSubjectChange}
+          options={SUBJECTS
+            .filter(s => s.id !== 'all')
+            .map(s => ({ value: s.id, label: s.label }))}
           style={{
-            width: '100%', maxWidth: 280, padding: '8px 12px',
-            borderRadius: 9, border: '0.5px solid var(--t-border-acc)',
-            background: 'var(--t-select-bg)', color: 'var(--t-text)',
-            fontSize: 13, cursor: 'pointer', backdropFilter: 'var(--t-blur)', outline: 'none',
+            width: 320,
           }}
-        >
-          {SUBJECTS.filter(s => s.id !== 'all').map(s => (
-            <option key={s.id} value={s.id}>{s.label}</option>
-          ))}
-        </select>
+        />
       </div>
 
       {/* Visibility + scheduled release defaults */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginBottom: 16, alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 18, alignItems: 'flex-end' }}>
         <div>
-          <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-sub)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>
             默认可见性
           </label>
           <div className="tu-switch-row">
-            <Switch
-              size="small"
+            <VisibilityToggle
               checked={defaultVisible}
               onChange={onDefaultVisibleChange}
-              checkedChildren="可见"
-              unCheckedChildren="隐藏"
-              style={{ backgroundColor: defaultVisible ? '#a855f7' : undefined }}
             />
             <span className="tu-switch-label">
               {defaultVisible ? '上传后学生立即可见' : '上传后默认隐藏'}
@@ -524,26 +871,29 @@ function DropZone({ selectedSubject, onSubjectChange, defaultVisible, onDefaultV
         </div>
 
         <div>
-          <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-sub)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>
             定时发布（可选）
           </label>
           <DatePicker
+            className="tu-release-picker"
+            classNames={{ popup: { root: 'tu-release-picker-dropdown' } }}
             showTime
             format="YYYY-MM-DD HH:mm"
             placeholder="选择发布时间"
             value={defaultReleaseAt ? dayjs(defaultReleaseAt) : null}
-            onChange={val => onDefaultReleaseAtChange(val ? val.valueOf() : null)}
-            disabledDate={d => d && d.valueOf() < Date.now() - 86400000}
-            size="small"
+            onChange={val => onDefaultReleaseAtChange(toFutureTimestamp(val))}
+            disabledDate={disabledReleaseDate}
+            disabledTime={disabledReleaseTime}
             style={{
               background: 'var(--t-input-bg)',
               borderColor: 'var(--t-border-acc)',
-              borderRadius: 9,
-              fontSize: 12,
+              borderRadius: 10,
+              minHeight: 38,
+              minWidth: 194,
             }}
           />
           {defaultReleaseAt && (
-            <p style={{ fontSize: 11, color: 'var(--t-amber)', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 12, color: 'var(--t-amber)', margin: '4px 0 0' }}>
               将在 {fmtTs(defaultReleaseAt)} 自动对学生可见
             </p>
           )}
@@ -573,11 +923,11 @@ function DropZone({ selectedSubject, onSubjectChange, defaultVisible, onDefaultV
           <Icons.Upload s={36} />
         </span>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--t-text)', margin: '0 0 4px' }}>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-text)', margin: '0 0 5px' }}>
             拖拽文件至此，或
             <span style={{ color: 'var(--t-purple)', marginLeft: 4, textDecoration: 'underline' }}>点击选择</span>
           </p>
-          <p style={{ fontSize: 11, color: 'var(--t-text-sub)', margin: 0 }}>
+          <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: 0 }}>
             支持 PDF · PPTX · DOCX · TXT
           </p>
         </div>
@@ -613,8 +963,8 @@ function StatsBar({ files }) {
       {chips.map(({ label, n, c }) => (
         <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: c, display: 'inline-block', boxShadow: `0 0 5px ${c}99` }} />
-          <span style={{ fontSize: 11, color: 'var(--t-text-sub)' }}>{label}</span>
-          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text)' }}>{n}</span>
+          <span style={{ fontSize: 12, color: 'var(--t-text-sub)' }}>{label}</span>
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--t-text)' }}>{n}</span>
         </div>
       ))}
     </div>
@@ -626,7 +976,7 @@ function StatsBar({ files }) {
 // ════════════════════════════════════════════════════════════════
 function TableHeader() {
   const th = (t, align = 'left') => (
-    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--t-text-sub)', letterSpacing: '0.07em', textTransform: 'uppercase', textAlign: align }}>
+    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--t-text-sub)', letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: align }}>
       {t}
     </span>
   )
@@ -706,7 +1056,7 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
             style={{
               background: 'none', border: 'none', padding: 0,
               cursor: hasBlob ? 'pointer' : 'default',
-              fontSize: 12, fontWeight: 500,
+              fontSize: 13, fontWeight: 500,
               color: hasBlob ? 'var(--t-cyan)' : 'var(--t-text)',
               textDecoration: hasBlob ? 'underline' : 'none',
               textDecorationColor: 'rgba(14,165,233,0.40)',
@@ -719,7 +1069,7 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
             {item.name}
           </button>
           {item.releaseAt && publishStatus === 'scheduled' && (
-            <span style={{ fontSize: 10, color: 'var(--t-amber)', display: 'block', marginTop: 2 }}>
+            <span style={{ fontSize: 11, color: 'var(--t-amber)', display: 'block', marginTop: 2 }}>
               {fmtTs(item.releaseAt)} 发布
             </span>
           )}
@@ -729,7 +1079,7 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
       {/* Subject pill */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <span style={{
-          fontSize: 10, padding: '2px 8px', borderRadius: 20,
+          fontSize: 11, padding: '3px 8px', borderRadius: 20,
           background: 'rgba(168,85,247,0.10)', border: '0.5px solid rgba(168,85,247,0.25)',
           color: '#c084fc', whiteSpace: 'nowrap', maxWidth: 72,
           overflow: 'hidden', textOverflow: 'ellipsis',
@@ -739,7 +1089,7 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
       </div>
 
       {/* Size */}
-      <span style={{ fontSize: 11, color: 'var(--t-text-sub)', textAlign: 'right' }}>
+      <span style={{ fontSize: 12, color: 'var(--t-text-sub)', textAlign: 'right' }}>
         {fmtSz(item.size)}
       </span>
 
@@ -750,13 +1100,9 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
 
       {/* Visibility switch */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexDirection: 'column', alignItems: 'center' }}>
-        <Switch
-          size="small"
+        <VisibilityToggle
           checked={item.isVisible}
           onChange={val => onToggleVisible(item.id, val)}
-          checkedChildren="可见"
-          unCheckedChildren="隐藏"
-          style={{ backgroundColor: item.isVisible ? '#a855f7' : undefined }}
         />
         <Tooltip
           title={item.releaseAt
@@ -769,26 +1115,29 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
             style={{
               background: 'none', border: 'none', padding: 0,
               cursor: 'pointer', color: item.releaseAt ? 'var(--t-amber)' : 'var(--t-text-sub)',
-              display: 'flex', alignItems: 'center', gap: 3, fontSize: 10,
+              display: 'flex', alignItems: 'center', gap: 3, fontSize: 11,
             }}
           >
-            <Icons.Clock s={10} />
+            <Icons.Clock s={11} />
             {item.releaseAt ? '已计划' : '定时'}
           </button>
         </Tooltip>
         {showDatePicker && (
           <DatePicker
+            className="tu-release-picker"
+            classNames={{ popup: { root: 'tu-release-picker-dropdown' } }}
             showTime
             format="MM-DD HH:mm"
             size="small"
             open
             value={item.releaseAt ? dayjs(item.releaseAt) : null}
             onChange={val => {
-              onSetReleaseAt(item.id, val ? val.valueOf() : null)
+              onSetReleaseAt(item.id, toFutureTimestamp(val))
               setShowDatePicker(false)
             }}
             onOpenChange={open => { if (!open) setShowDatePicker(false) }}
-            disabledDate={d => d && d.valueOf() < Date.now() - 86400000}
+            disabledDate={disabledReleaseDate}
+            disabledTime={disabledReleaseTime}
             style={{ position: 'absolute', zIndex: 999, display: 'none' }}
             getPopupContainer={t => t.parentNode}
           />
@@ -835,7 +1184,7 @@ function EmptyState({ subject }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '42px 0', color: 'var(--t-text-sub)' }}>
       <Icons.Empty s={46} />
       <p style={{ fontSize: 13, margin: 0 }}>{label}</p>
-      <p style={{ fontSize: 11, margin: 0, opacity: 0.6 }}>请在上方上传区选择对应科目后上传文件</p>
+      <p style={{ fontSize: 12, margin: 0, opacity: 0.6 }}>请在上方上传区选择对应科目后上传文件</p>
     </div>
   )
 }
@@ -855,7 +1204,7 @@ export default function TeacherUpload() {
   const [defaultVisible,    setDefaultVisible]     = useState(true)
   const [defaultReleaseAt,  setDefaultReleaseAt]   = useState(null)
 
-  useEffect(() => { injectCSS() }, [])
+  useEffect(() => { injectCSS() })
 
   const subjectCounts = useMemo(() => {
     const counts = {}
