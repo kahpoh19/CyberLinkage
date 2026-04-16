@@ -2,8 +2,11 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --registry=${NPM_REGISTRY} --prefer-offline --no-audit --fund=false
 
 COPY . .
 RUN npm run build
