@@ -9,6 +9,8 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --registry=${NPM_REGISTRY} --prefer-offline --no-audit --fund=false
 
 COPY . .
+
+# Add this line to actually compile the project!
 RUN npm run build
 
 # --- serve with nginx ---
