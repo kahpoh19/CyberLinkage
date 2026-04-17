@@ -19,11 +19,17 @@ router = APIRouter(prefix="/api/profile", tags=["个人信息"])
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 AVATAR_DIR = os.path.join(UPLOAD_DIR, "avatars")
 DOC_DIR = os.path.join(UPLOAD_DIR, "documents")
+
+
 def _avatar_path(user: User) -> Path | None:
     if not user.avatar:
         return None
-    # user.avatar 形如 /uploads/avatars/xxx.png
     return Path(__file__).resolve().parents[1] / user.avatar.lstrip("/")
+
+
+def _document_path(document: UserDocument) -> Path:
+    return Path(__file__).resolve().parents[1] / document.filepath.lstrip("/")
+
 
 os.makedirs(AVATAR_DIR, exist_ok=True)
 os.makedirs(DOC_DIR, exist_ok=True)
@@ -32,6 +38,7 @@ os.makedirs(DOC_DIR, exist_ok=True)
 class ProfileUpdate(BaseModel):
     display_name: Optional[str] = None
     role: Optional[str] = None
+
 
 class ProfileResponse(BaseModel):
     id: int
@@ -114,6 +121,7 @@ async def upload_avatar(
     db.refresh(user)
     return {"avatar": user.avatar}
 
+
 @router.delete("/avatar")
 def delete_avatar(
     user: User = Depends(require_user),
@@ -130,6 +138,7 @@ def delete_avatar(
     db.commit()
     db.refresh(user)
     return {"ok": True}
+
 
 @router.post("/documents", response_model=DocumentItem)
 async def upload_document(
@@ -176,8 +185,11 @@ def delete_document(
     ).first()
     if not doc:
         raise HTTPException(404, "文件不存在")
-    if os.path.exists(doc.filepath.lstrip("/")):
-        os.remove(doc.filepath.lstrip("/"))
+
+    doc_path = _document_path(doc)
+    if doc_path.exists():
+        doc_path.unlink()
+
     db.delete(doc)
     db.commit()
     return {"ok": True}

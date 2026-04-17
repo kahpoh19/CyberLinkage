@@ -24,7 +24,7 @@ import useUserStore from './store/userStore'
 import { login, register, getMe } from './api'
 import Sandbox from './pages/Sandbox'
 import Profile from './pages/Profile'
-import { UserOutlined } from '@ant-design/icons'
+import UserOutlined from '@ant-design/icons/es/icons/UserOutlined'
 import { getAvatarUrl, getDisplayName } from './utils/user'
 
 const { Sider, Content, Header } = Layout
@@ -38,11 +38,7 @@ const menuItems = [
   { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
   { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
   { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
-  {
-    key: '/profile',
-    icon: <UserOutlined />,
-    label: '个人中心',
-  }
+  { key: '/profile', icon: <UserOutlined />, label: '个人中心' },
 ]
 
 const DISCO_COLORS = [
@@ -154,9 +150,11 @@ export default function App() {
   const overlayRef = useRef(null)
   const hasToken = isAuthenticated()
   const isTeacher = user?.role === 'teacher'
-  const visibleMenuItems = isTeacher
-    ? menuItems
-    : menuItems.filter((item) => item.key !== '/teacher')
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.key === '/teacher') return isTeacher
+    if (item.key === '/profile') return hasToken
+    return true
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -380,14 +378,7 @@ export default function App() {
           minHeight: 64,
           lineHeight: 1,
         }}>
-          <Title
-            level={5}
-            style={{
-              margin: 0,
-              lineHeight: 1.3,
-              color: isDark ? '#ffffff' : '#111111',
-            }}
-          >
+          <Title level={5} style={{ margin: 0, lineHeight: 1.3 }}>
             基于知识图谱的个性化学习伴侣
           </Title>
           <div style={headerActionsStyle}>
@@ -457,7 +448,10 @@ export default function App() {
             <Route path="/graph" element={<KnowledgeGraph />} />
             <Route path="/path" element={<LearningPath />} />
             <Route path="/chat" element={<Chat />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route
+              path="/profile"
+              element={isAuthenticated() ? <Profile /> : <Navigate to="/" replace />}
+            />
             <Route
               path="/teacher"
               element={(
@@ -467,7 +461,6 @@ export default function App() {
               )}
             />
             <Route path="/sandbox" element={<Sandbox />} />
-
           </Routes>
         </Content>
       </Layout>

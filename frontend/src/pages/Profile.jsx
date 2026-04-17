@@ -21,7 +21,7 @@ import {
     deleteDocument,
     getProgress,
 } from '../api'
-import { API_ORIGIN, getAvatarUrl, getDisplayName, getFileUrl, getRoleLabel } from '../utils/user'
+import { getAvatarUrl, getDisplayName, getFileUrl, getRoleLabel } from '../utils/user'
 import JSZip from 'jszip'
 
 const { Title } = Typography
@@ -196,20 +196,26 @@ export default function Profile() {
         }
     }
 
-    const handleBatchDelete = async () => {
-        if (!selectedDocuments.length) {
+    const deleteDocumentsByRows = async (docsToDelete) => {
+        if (!docsToDelete.length) {
             message.warning('请先勾选文件')
             return
         }
 
+        const idsToDelete = docsToDelete.map((doc) => doc.id)
+
         try {
-            await Promise.all(selectedDocuments.map((doc) => deleteDocument(doc.id)))
-            setDocuments((prev) => prev.filter((doc) => !selectedRowKeys.includes(doc.id)))
-            setSelectedRowKeys([])
+            await Promise.all(idsToDelete.map((id) => deleteDocument(id)))
+            setDocuments((prev) => prev.filter((doc) => !idsToDelete.includes(doc.id)))
+            setSelectedRowKeys((prev) => prev.filter((id) => !idsToDelete.includes(id)))
             message.success('删除成功')
         } catch {
             message.error('删除失败')
         }
+    }
+
+    const handleBatchDelete = async () => {
+        await deleteDocumentsByRows(selectedDocuments)
     }
 
     const handleSelectAllDocuments = () => {
@@ -299,14 +305,11 @@ export default function Profile() {
                     >
                         下载
                     </Button>
-                    <Popconfirm title="确认删除？" onConfirm={() => handleBatchDelete()}>
+                    <Popconfirm title="确认删除？" onConfirm={() => deleteDocumentsByRows([record])}>
                         <Button
                             icon={<DeleteOutlined />}
                             size="small"
                             danger
-                            onClick={() => {
-                                setSelectedRowKeys([record.id])
-                            }}
                         >
                             删除
                         </Button>

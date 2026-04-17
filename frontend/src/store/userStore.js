@@ -1,93 +1,127 @@
 import { create } from 'zustand'
 
 const THEME_STORAGE_KEY = 'cyberlinkage_theme'
+const VALID_THEMES = new Set(['auto', 'light', 'dark'])
+const CHAT_WELCOME_MESSAGE = '你好！我是CyberLinkage助教 🧠\n\n我可以帮你解答 C 语言学习中遇到的问题。默认使用「苏格拉底式引导」—— 我会通过提问帮你自己发现答案，而不是直接告诉你。\n\n如果你想要直接解释，可以关闭引导模式。\n\n有什么想问的？'
 
-const safeGetItem = (key, fallback = null) => {
-  if (typeof window === 'undefined') return fallback
-  try {
-    return window.localStorage.getItem(key) ?? fallback
-  } catch {
-    return fallback
-  }
+function normalizeTheme(theme) {
+  return VALID_THEMES.has(theme) ? theme : 'auto'
 }
 
-const safeSetItem = (key, value) => {
+function getSystemTheme() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light'
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function resolveTheme(theme) {
+  const normalized = normalizeTheme(theme)
+  return normalized === 'auto' ? getSystemTheme() : normalized
+}
+
+function getInitialTheme() {
+  if (typeof window === 'undefined') return 'auto'
+  return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'auto')
+}
+
+function persistTheme(theme) {
   if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(key, value)
-  } catch {
-    // ignore storage errors
-  }
+  window.localStorage.setItem(THEME_STORAGE_KEY, theme)
 }
 
-const safeRemoveItem = (key) => {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(key)
-  } catch {
-    // ignore storage errors
-  }
+function createInitialChatMessages() {
+  return [
+    {
+      role: 'ai',
+      content: CHAT_WELCOME_MESSAGE,
+      timestamp: new Date().toLocaleTimeString(),
+    },
+  ]
 }
 
-const useUserStore = create((set, get) => ({
-  user: null,
-  token: safeGetItem('cyberlinkage_token', null),
-  theme: safeGetItem(THEME_STORAGE_KEY, 'light'),
-  discoMode: false,
-  showAuthModal: false,
-  _discoTimer: null,
+const useUserStore = create((set, get) => {
+  const initialTheme = getInitialTheme()
 
-  openAuthModal: () => set({ showAuthModal: true }),
-  closeAuthModal: () => set({ showAuthModal: false }),
+  return {
+    theme: initialTheme,
+    resolvedTheme: resolveTheme(initialTheme),
+    user: null,
+    token: localStorage.getItem('cyberlinkage_token') || null,
+    discoMode: false,
+    chatMessages: createInitialChatMessages(),
+    chatLoading: false,
+    socraticMode: true,
+    showAuthModal: false,          // ← add
+    openAuthModal: () => set({ showAuthModal: true }),   // ← add
+    closeAuthModal: () => set({ showAuthModal: false }),  // ← add
 
-  setUser: (user) => set({ user }),
+    setUser: (user) => set({ user }),
 
-  setToken: (token) => {
-    safeSetItem('cyberlinkage_token', token)
-    set({ token })
-  },
+    setToken: (token) => {
+      localStorage.setItem('cyberlinkage_token', token)
+      set({ token })
+    },
 
-  login: (user, token) => {
-    safeSetItem('cyberlinkage_token', token)
-    set({ user, token })
-  },
+    login: (user, token) => {
+      localStorage.setItem('cyberlinkage_token', token)
+      set({ user, token })
+    },
 
-  logout: () => {
-    clearTimeout(get()._discoTimer)
-    safeRemoveItem('cyberlinkage_token')
-    set({
-      user: null,
-      token: null,
-      discoMode: false,
-      _discoTimer: null,
-    })
-  },
+    logout: () => {
+      localStorage.removeItem('cyberlinkage_token')
+      set({
+        user: null,
+        token: null,
+        chatMessages: createInitialChatMessages(),
+        chatLoading: false,
+        socraticMode: true,
+      })
+    },
 
-  isAuthenticated: () => !!get().token,
-  isTeacher: () => get().user?.role === 'teacher',
+    isAuthenticated: () => !!get().token,
 
-  setTheme: (theme) => {
-    const next = theme === 'dark' ? 'dark' : 'light'
-    safeSetItem(THEME_STORAGE_KEY, next)
-    set({ theme: next })
-  },
+    setTheme: (theme) => {
+      const next = normalizeTheme(theme)
+      persistTheme(next)
+      set({ theme: next, resolvedTheme: resolveTheme(next) })
+    },
 
-  toggleTheme: () => {
-    const next = get().theme === 'light' ? 'dark' : 'light'
-    safeSetItem(THEME_STORAGE_KEY, next)
-    set({ theme: next })
-  },
+    toggleTheme: () => {
+      const order = ['auto', 'light', 'dark']
+      const current = normalizeTheme(get().theme)
+      const next = order[(order.indexOf(current) + 1) % order.length]
+      persistTheme(next)
+      set({ theme: next, resolvedTheme: resolveTheme(next) })
+    },
 
-  activateDisco: () => {
-    if (get().discoMode) return
-    const timer = setTimeout(() => set({ discoMode: false, _discoTimer: null }), 10000)
-    set({ discoMode: true, _discoTimer: timer })
-  },
+    syncSystemTheme: () => {
+      set({ resolvedTheme: resolveTheme(get().theme) })
+    },
 
-  deactivateDisco: () => {
-    clearTimeout(get()._discoTimer)
-    set({ discoMode: false, _discoTimer: null })
-  },
-}))
+    setSocraticMode: (socraticMode) => set({ socraticMode }),
+
+    setChatLoading: (chatLoading) => set({ chatLoading }),
+
+    addChatMessage: (message) => {
+      set((state) => ({ chatMessages: [...state.chatMessages, message] }))
+    },
+
+    setChatMessages: (chatMessages) => set({ chatMessages }),
+
+    resetChatMessages: () => set({ chatMessages: createInitialChatMessages(), chatLoading: false }),
+
+    activateDisco: () => {
+      if (get().discoMode) return
+      const timer = setTimeout(() => set({ discoMode: false, _discoTimer: null }), 10000)
+      set({ discoMode: true, _discoTimer: timer })
+    },
+
+    deactivateDisco: () => {
+      clearTimeout(get()._discoTimer)
+      set({ discoMode: false, _discoTimer: null })
+    },
+  }
+})
 
 export default useUserStore

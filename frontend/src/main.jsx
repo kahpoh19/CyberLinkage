@@ -8,24 +8,39 @@ import useUserStore from './store/userStore'
 
 function Root() {
   const themeMode = useUserStore((s) => s.theme)
-  const fontSize = useUserStore((s) => s.fontSize)
-  const fontFamily = useUserStore((s) => s.fontFamily)
+  const resolvedTheme = useUserStore((s) => s.resolvedTheme)
+  const syncSystemTheme = useUserStore((s) => s.syncSystemTheme)
 
   useEffect(() => {
-    document.body.style.minHeight = '100vh'
-    document.body.style.backgroundColor = themeMode === 'dark' ? '#141414' : '#f5f5f5'
-    document.body.style.color = themeMode === 'dark' ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.88)'
-    document.documentElement.style.colorScheme = themeMode === 'dark' ? 'dark' : 'light'
-  }, [themeMode])
+    syncSystemTheme()
+
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const handleChange = () => syncSystemTheme()
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handleChange)
+      return () => media.removeEventListener('change', handleChange)
+    }
+
+    media.addListener(handleChange)
+    return () => media.removeListener(handleChange)
+  }, [themeMode, syncSystemTheme])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', resolvedTheme)
+    document.documentElement.style.colorScheme = resolvedTheme
+  }, [resolvedTheme])
 
   return (
     <ConfigProvider
       locale={zhCN}
       theme={{
-        algorithm: themeMode === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
-        token: {
-          colorPrimary: '#1677ff',
-        },
+        algorithm: resolvedTheme === 'dark'
+          ? antTheme.darkAlgorithm
+          : antTheme.defaultAlgorithm,
+        token: { colorPrimary: '#1677ff' },
       }}
     >
       <BrowserRouter>
