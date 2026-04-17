@@ -440,6 +440,7 @@ export default function Sandbox() {
   const isDarkRef    = useRef(isDark)
   const deadPointRef = useRef(false)
   const prevPosRef   = useRef({})
+  const prevStaticCurve = useRef([]) // ← 补充这行
 
   // Fix 1: Chart dimension toggle state
   const [chartDimension, setChartDimension] = useState('x')
@@ -457,20 +458,6 @@ export default function Sandbox() {
   useEffect(() => { selectedRef.current = state.selected }, [state.selected])
   useEffect(() => { toolRef.current = state.tool }, [state.tool])
   useEffect(() => { isDarkRef.current = isDark }, [isDark])
-
-  // Fix 4: Track joint/link count for trail reset
-  const prevJointCountRef = useRef(0)
-  const prevLinkCountRef  = useRef(0)
-  useEffect(() => {
-    const jLen = state.joints.length
-    const lLen = state.links.length
-    if (jLen !== prevJointCountRef.current || lLen !== prevLinkCountRef.current) {
-      trailRef.current = {}
-      setLiveChartData([])
-      prevJointCountRef.current = jLen
-      prevLinkCountRef.current  = lLen
-    }
-  }, [state.joints.length, state.links.length])
 
   // ── Coordinate helpers ────────────────────────────────────────
 
@@ -662,7 +649,7 @@ export default function Sandbox() {
     deadPointRef.current = false
     setShowInvalidOverlay(false)
     setLiveChartData([])
-
+    prevStaticCurve.current = [] // ← 补充这行，同步清掉缓存
     let joints = [], links = []
 
     if (name === 'fourbar') {
@@ -772,7 +759,12 @@ export default function Sandbox() {
   const handleMouseMove = useCallback((e) => {
     const { sx, sy } = getCanvasXY(e)
     if (panningRef.current && panStartRef.current) {
-      const newT = { ...transformRef.current, x: sx - panStartRef.current.x, y: sy - transformRef.current.y }
+      // 改成这样
+    const newT = { 
+      ...transformRef.current, 
+      x: sx - panStartRef.current.x, 
+      y: sy - panStartRef.current.y   // ← 这里改了
+    }
       transformRef.current = newT
       dispatch({ type: 'SET_TRANSFORM', payload: newT })
       return
@@ -975,13 +967,17 @@ const linkSnapshot = JSON.stringify(
 
 const staticCurveData = useMemo(() => {
   if (!drivenJoint || !outputJoint) return []
+  // 播放中直接返回上次结果
+  if (playingRef.current) return prevStaticCurve.current  
   try {
-    return computeDisplacementCurveSafe(
+    const result = computeDisplacementCurveSafe(
       jointsRef.current.map(j => ({ ...j })),
       linksRef.current.map(l => ({ ...l })),
       drivenJoint.id,
       outputJoint.id
     )
+    prevStaticCurve.current = result // ← 补充这行：将结果存入缓存
+    return result
   } catch { return [] }
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [chartDimension, jointSnapshot, linkSnapshot])
