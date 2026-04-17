@@ -5,7 +5,7 @@ const CHAT_STORAGE_PREFIX = 'cyberlinkage_chat_messages'
 const SUBJECT_STORAGE_KEY = 'cyberlinkage_subject'
 const APP_BUILD_ID = typeof __CYBERLINKAGE_BUILD_ID__ === 'string' ? __CYBERLINKAGE_BUILD_ID__ : 'dev'
 const CHAT_STORAGE_KEY = `${CHAT_STORAGE_PREFIX}_${APP_BUILD_ID}`
-const VALID_THEMES = new Set(['auto', 'light', 'dark'])
+const VALID_THEMES = new Set(['light', 'dark'])
 const CHAT_WELCOME_MESSAGE = '你好！我是CyberLinkage助教 🧠\n\n我可以帮你解答 C 语言学习中遇到的问题。默认使用「苏格拉底式引导」—— 我会通过提问帮你自己发现答案，而不是直接告诉你。\n\n如果你想要直接解释，可以关闭引导模式。\n\n有什么想问的？'
 
 export const SUBJECTS = [
@@ -28,24 +28,16 @@ function persistSubject(id) {
 }
 
 function normalizeTheme(theme) {
-  return VALID_THEMES.has(theme) ? theme : 'auto'
-}
-
-function getSystemTheme() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'light'
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return VALID_THEMES.has(theme) ? theme : 'light'
 }
 
 function resolveTheme(theme) {
-  const normalized = normalizeTheme(theme)
-  return normalized === 'auto' ? getSystemTheme() : normalized
+  return normalizeTheme(theme)
 }
 
 function getInitialTheme() {
-  if (typeof window === 'undefined') return 'auto'
-  return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'auto')
+  if (typeof window === 'undefined') return 'light'
+  return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'light')
 }
 
 function persistTheme(theme) {
@@ -173,15 +165,14 @@ const useUserStore = create((set, get) => {
     },
 
     toggleTheme: () => {
-      const order = ['auto', 'light', 'dark']
       const current = normalizeTheme(get().theme)
-      const next = order[(order.indexOf(current) + 1) % order.length]
+      const next = current === 'light' ? 'dark' : 'light'
       persistTheme(next)
-      set({ theme: next, resolvedTheme: resolveTheme(next) })
+      set({ theme: next, resolvedTheme: next })
     },
 
     syncSystemTheme: () => {
-      set({ resolvedTheme: resolveTheme(get().theme) })
+      set({ resolvedTheme: normalizeTheme(get().theme) })
     },
 
     setSocraticMode: (socraticMode) => set({ socraticMode }),
