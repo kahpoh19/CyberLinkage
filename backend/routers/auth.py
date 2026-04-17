@@ -20,8 +20,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
-# ─── Schemas ────────────────────────────────────────────
-
 class RegisterRequest(BaseModel):
     username: str
     email: str
@@ -45,12 +43,12 @@ class UserResponse(BaseModel):
     email: str
     role: str
     created_at: datetime
+    display_name: Optional[str] = None
+    avatar: Optional[str] = None
 
     class Config:
         from_attributes = True
 
-
-# ─── 工具函数 ───────────────────────────────────────────
 
 def create_token(user_id: int) -> str:
     expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
@@ -80,12 +78,9 @@ def require_user(user: Optional[User] = Depends(get_current_user)) -> User:
     return user
 
 
-# ─── 路由 ───────────────────────────────────────────────
-
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     """注册新用户"""
-    # 检查重复
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(400, "用户名已存在")
     if db.query(User).filter(User.email == req.email).first():
@@ -117,4 +112,15 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(user: User = Depends(require_user)):
     """获取当前登录用户信息"""
-    return user
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "created_at": user.created_at,
+        "display_name": user.display_name,
+        "avatar": user.avatar,
+        "font_size": getattr(user, "font_size", 14) or 14,
+        "font_family": getattr(user, "font_family", "default") or "default",
+        "theme": getattr(user, "theme", "light") or "light",
+    }

@@ -23,6 +23,9 @@ import TeacherUpload from './pages/TeacherUpload'
 import useUserStore from './store/userStore'
 import { login, register, getMe } from './api'
 import Sandbox from './pages/Sandbox'
+import Profile from './pages/Profile'
+import UserOutlined from '@ant-design/icons/es/icons/UserOutlined'
+import { getAvatarUrl, getDisplayName } from './utils/user'
 
 const { Sider, Content, Header } = Layout
 const { Title } = Typography
@@ -35,6 +38,7 @@ const menuItems = [
   { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
   { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
   { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
+  { key: '/profile', icon: <UserOutlined />, label: '个人中心' },
 ]
 
 const DISCO_COLORS = [
@@ -146,9 +150,11 @@ export default function App() {
   const overlayRef = useRef(null)
   const hasToken = isAuthenticated()
   const isTeacher = user?.role === 'teacher'
-  const visibleMenuItems = isTeacher
-    ? menuItems
-    : menuItems.filter((item) => item.key !== '/teacher')
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.key === '/teacher') return isTeacher
+    if (item.key === '/profile') return hasToken
+    return true
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -251,7 +257,7 @@ export default function App() {
       disabled: true,
       label: (
         <div style={{ minWidth: 120, lineHeight: 1.4 }}>
-          <div style={{ fontWeight: 600 }}>{user?.username || 'User'}</div>
+          <div style={{ fontWeight: 600 }}>{getDisplayName(user) || 'User'}</div>
           <div style={{ fontSize: 12, color: '#8c8c8c' }}>
             {user?.role === 'teacher' ? 'Teacher' : 'Student'}
           </div>
@@ -417,6 +423,7 @@ export default function App() {
                   }}
                 >
                   <Avatar
+                    src={getAvatarUrl(user?.avatar)}
                     style={{
                       backgroundColor: discoMode ? '#ff0080' : '#1677ff',
                       transition: 'background 0.15s',
@@ -424,7 +431,7 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   >
-                    {user?.username?.[0]?.toUpperCase() || 'U'}
+                    {!user?.avatar && (getDisplayName(user)?.[0]?.toUpperCase() || 'U')}
                   </Avatar>
                 </Dropdown>
               </>
@@ -441,6 +448,10 @@ export default function App() {
             <Route path="/graph" element={<KnowledgeGraph />} />
             <Route path="/path" element={<LearningPath />} />
             <Route path="/chat" element={<Chat />} />
+            <Route
+              path="/profile"
+              element={isAuthenticated() ? <Profile /> : <Navigate to="/" replace />}
+            />
             <Route
               path="/teacher"
               element={(

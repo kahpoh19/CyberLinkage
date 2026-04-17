@@ -49,3 +49,25 @@ export const chatWithAI = (message, mode = 'socratic', history = []) =>
   api.post('/chat', { message, mode, history })
 
 export default api
+
+// ─── 个人信息 ──────────────────────────────────────────
+
+export const getProfile = () => api.get('/profile/me')
+export const updateProfile = (data) => api.patch('/profile/me', data)
+export const uploadAvatar = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/profile/avatar', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+export const deleteAvatar = () => api.delete('/profile/avatar')
+export const getDocuments = () => api.get('/profile/documents')
+export const uploadDocument = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/profile/documents', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+export const deleteDocument = (id) => api.delete(`/profile/documents/${id}`)
