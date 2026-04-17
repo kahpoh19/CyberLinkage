@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 
 const THEME_STORAGE_KEY = 'cyberlinkage_theme'
+const CHAT_STORAGE_PREFIX = 'cyberlinkage_chat_messages'
+const APP_BUILD_ID = typeof __CYBERLINKAGE_BUILD_ID__ === 'string' ? __CYBERLINKAGE_BUILD_ID__ : 'dev'
+const CHAT_STORAGE_KEY = `${CHAT_STORAGE_PREFIX}_${APP_BUILD_ID}`
 const VALID_THEMES = new Set(['auto', 'light', 'dark'])
 const CHAT_WELCOME_MESSAGE = '你好！我是CyberLinkage助教 🧠\n\n我可以帮你解答 C 语言学习中遇到的问题。默认使用「苏格拉底式引导」—— 我会通过提问帮你自己发现答案，而不是直接告诉你。\n\n如果你想要直接解释，可以关闭引导模式。\n\n有什么想问的？'
 
@@ -40,6 +43,73 @@ function createInitialChatMessages() {
   ]
 }
 
+function isValidChatMessage(message) {
+  return (
+    message &&
+    typeof message === 'object' &&
+    ['ai', 'user'].includes(message.role) &&
+    typeof message.content === 'string'
+  )
+}
+
+function clearStaleChatMessages() {
+  if (typeof window === 'undefined') return
+
+  try {
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const key = window.localStorage.key(i)
+      if (key?.startsWith(CHAT_STORAGE_PREFIX) && key !== CHAT_STORAGE_KEY) {
+        window.localStorage.removeItem(key)
+      }
+    }
+  } catch {
+    // Ignore storage failures so the in-memory chat can still work.
+  }
+}
+
+function getStoredChatMessages() {
+  if (typeof window === 'undefined') return null
+
+  clearStaleChatMessages()
+
+  try {
+    const raw = window.localStorage.getItem(CHAT_STORAGE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed) || !parsed.every(isValidChatMessage)) return null
+
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function persistChatMessages(chatMessages) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatMessages))
+  } catch {
+    // Ignore storage failures so the in-memory chat can still work.
+  }
+}
+
+function clearStoredChatMessages() {
+  if (typeof window === 'undefined') return
+
+  try {
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const key = window.localStorage.key(i)
+      if (key?.startsWith(CHAT_STORAGE_PREFIX)) {
+        window.localStorage.removeItem(key)
+      }
+    }
+  } catch {
+    // Ignore storage failures so logout still clears the in-memory state.
+  }
+}
+
 const useUserStore = create((set, get) => {
   const initialTheme = getInitialTheme()
 
@@ -49,7 +119,7 @@ const useUserStore = create((set, get) => {
     user: null,
     token: localStorage.getItem('cyberlinkage_token') || null,
     discoMode: false,
-    chatMessages: createInitialChatMessages(),
+    chatMessages: getStoredChatMessages() || createInitialChatMessages(),
     chatLoading: false,
     socraticMode: true,
     showAuthModal: false,          // ← add
@@ -70,6 +140,7 @@ const useUserStore = create((set, get) => {
 
     logout: () => {
       localStorage.removeItem('cyberlinkage_token')
+      clearStoredChatMessages()
       set({
         user: null,
         token: null,
@@ -104,12 +175,23 @@ const useUserStore = create((set, get) => {
     setChatLoading: (chatLoading) => set({ chatLoading }),
 
     addChatMessage: (message) => {
-      set((state) => ({ chatMessages: [...state.chatMessages, message] }))
+      set((state) => {
+        const chatMessages = [...state.chatMessages, message]
+        persistChatMessages(chatMessages)
+        return { chatMessages }
+      })
     },
 
-    setChatMessages: (chatMessages) => set({ chatMessages }),
+    setChatMessages: (chatMessages) => {
+      persistChatMessages(chatMessages)
+      set({ chatMessages })
+    },
 
-    resetChatMessages: () => set({ chatMessages: createInitialChatMessages(), chatLoading: false }),
+    resetChatMessages: () => {
+      const chatMessages = createInitialChatMessages()
+      persistChatMessages(chatMessages)
+      set({ chatMessages, chatLoading: false })
+    },
 
     activateDisco: () => {
       if (get().discoMode) return
