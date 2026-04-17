@@ -1076,10 +1076,8 @@ const staticCurveData = useMemo(() => {
       className="sandbox-page"
       ref={containerRef}
       style={{
-        minHeight: '100vh', overflowY: 'auto',
-        background: isDark
-          ? 'linear-gradient(135deg,#080b14 0%,#0d1120 50%,#080b14 100%)'
-          : 'linear-gradient(135deg,#f1f5f9 0%,#e8edf5 100%)',
+        minHeight: '100%', overflowY: 'auto',
+        background: 'var(--cy-page-bg, linear-gradient(135deg,#f1f5f9 0%,#e8edf5 100%))',
         padding: '0 0 32px',
         fontFamily: 'inherit',
         fontWeight: 400,

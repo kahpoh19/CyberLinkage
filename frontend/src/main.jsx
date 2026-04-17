@@ -5,6 +5,7 @@ import { ConfigProvider, theme as antTheme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import useUserStore from './store/userStore'
+import './index.css'
 
 function Root() {
   const themeMode = useUserStore((s) => s.theme)

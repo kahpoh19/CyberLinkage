@@ -1,0 +1,315 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f6f8fb;
+}
+
+[data-theme="dark"] body {
+  background: #07090d;
+}
+
+.cy-app-shell {
+  --cy-accent: #0ea5e9;
+  --cy-accent-2: #22c55e;
+  --cy-accent-3: #f97316;
+  --cy-text-soft: rgba(30, 41, 59, 0.72);
+  --cy-card-bg: rgba(255, 255, 255, 0.74);
+  --cy-card-border: rgba(15, 23, 42, 0.08);
+  --cy-header-bg: rgba(255, 255, 255, 0.72);
+  --cy-header-border: rgba(15, 23, 42, 0.08);
+  --cy-sider-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.70));
+  --cy-sider-border: rgba(15, 23, 42, 0.08);
+  --cy-page-bg:
+    radial-gradient(circle at 10% 8%, rgba(14, 165, 233, 0.18), transparent 32%),
+    radial-gradient(circle at 92% 18%, rgba(34, 197, 94, 0.16), transparent 30%),
+    linear-gradient(135deg, #f8fbff 0%, #eef6f8 48%, #f7fafc 100%);
+  --cy-app-bg: var(--cy-page-bg);
+  min-height: 100vh;
+  background: var(--cy-app-bg);
+}
+
+[data-theme="dark"] .cy-app-shell {
+  --cy-text-soft: rgba(226, 232, 240, 0.72);
+  --cy-card-bg: rgba(12, 16, 24, 0.68);
+  --cy-card-border: rgba(255, 255, 255, 0.08);
+  --cy-header-bg: rgba(9, 12, 18, 0.74);
+  --cy-header-border: rgba(255, 255, 255, 0.08);
+  --cy-sider-bg: linear-gradient(180deg, rgba(10, 13, 20, 0.92), rgba(8, 10, 15, 0.88));
+  --cy-sider-border: rgba(255, 255, 255, 0.08);
+  --cy-page-bg:
+    radial-gradient(circle at 12% 8%, rgba(14, 165, 233, 0.18), transparent 32%),
+    radial-gradient(circle at 88% 18%, rgba(34, 197, 94, 0.14), transparent 30%),
+    linear-gradient(135deg, #07090d 0%, #0b1110 48%, #07090d 100%);
+}
+
+.cy-app-shell.page-theme-dashboard {
+  --cy-accent: #06b6d4;
+  --cy-accent-2: #22c55e;
+  --cy-accent-3: #f59e0b;
+  --cy-page-bg:
+    radial-gradient(circle at 8% 10%, rgba(6, 182, 212, 0.20), transparent 31%),
+    radial-gradient(circle at 86% 14%, rgba(34, 197, 94, 0.16), transparent 30%),
+    radial-gradient(circle at 72% 86%, rgba(245, 158, 11, 0.12), transparent 32%),
+    linear-gradient(135deg, #f8fcff 0%, #edf8f2 52%, #f7fbff 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-dashboard {
+  --cy-page-bg:
+    radial-gradient(circle at 8% 10%, rgba(6, 182, 212, 0.18), transparent 31%),
+    radial-gradient(circle at 86% 14%, rgba(34, 197, 94, 0.14), transparent 30%),
+    radial-gradient(circle at 72% 86%, rgba(245, 158, 11, 0.10), transparent 32%),
+    linear-gradient(135deg, #07090d 0%, #0b1110 52%, #080a0f 100%);
+}
+
+.cy-app-shell.page-theme-diagnosis {
+  --cy-accent: #ef4444;
+  --cy-accent-2: #f59e0b;
+  --cy-accent-3: #14b8a6;
+  --cy-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(239, 68, 68, 0.16), transparent 30%),
+    radial-gradient(circle at 88% 16%, rgba(245, 158, 11, 0.18), transparent 31%),
+    radial-gradient(circle at 55% 88%, rgba(20, 184, 166, 0.12), transparent 34%),
+    linear-gradient(135deg, #fff8f8 0%, #fff7e8 48%, #f5fbfa 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-diagnosis {
+  --cy-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(239, 68, 68, 0.15), transparent 30%),
+    radial-gradient(circle at 88% 16%, rgba(245, 158, 11, 0.14), transparent 31%),
+    radial-gradient(circle at 55% 88%, rgba(20, 184, 166, 0.10), transparent 34%),
+    linear-gradient(135deg, #0a0909 0%, #10100a 48%, #080d0c 100%);
+}
+
+.cy-app-shell.page-theme-graph {
+  --cy-accent: #10b981;
+  --cy-accent-2: #0ea5e9;
+  --cy-accent-3: #84cc16;
+  --cy-page-bg:
+    radial-gradient(circle at 10% 18%, rgba(16, 185, 129, 0.20), transparent 31%),
+    radial-gradient(circle at 90% 12%, rgba(14, 165, 233, 0.16), transparent 32%),
+    radial-gradient(circle at 70% 88%, rgba(132, 204, 22, 0.12), transparent 32%),
+    linear-gradient(135deg, #f4fffb 0%, #eef8ff 50%, #f7fbef 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-graph {
+  --cy-page-bg:
+    radial-gradient(circle at 10% 18%, rgba(16, 185, 129, 0.16), transparent 31%),
+    radial-gradient(circle at 90% 12%, rgba(14, 165, 233, 0.13), transparent 32%),
+    radial-gradient(circle at 70% 88%, rgba(132, 204, 22, 0.09), transparent 32%),
+    linear-gradient(135deg, #070c0a 0%, #081014 50%, #0a0d08 100%);
+}
+
+.cy-app-shell.page-theme-path {
+  --cy-accent: #f97316;
+  --cy-accent-2: #22c55e;
+  --cy-accent-3: #06b6d4;
+  --cy-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(249, 115, 22, 0.18), transparent 30%),
+    radial-gradient(circle at 84% 18%, rgba(34, 197, 94, 0.16), transparent 32%),
+    radial-gradient(circle at 74% 86%, rgba(6, 182, 212, 0.12), transparent 32%),
+    linear-gradient(135deg, #fff8f1 0%, #effbef 52%, #f7fcff 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-path {
+  --cy-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(249, 115, 22, 0.15), transparent 30%),
+    radial-gradient(circle at 84% 18%, rgba(34, 197, 94, 0.13), transparent 32%),
+    radial-gradient(circle at 74% 86%, rgba(6, 182, 212, 0.10), transparent 32%),
+    linear-gradient(135deg, #0d0907 0%, #09110a 52%, #071012 100%);
+}
+
+.cy-app-shell.page-theme-chat {
+  --cy-accent: #ec4899;
+  --cy-accent-2: #14b8a6;
+  --cy-accent-3: #f59e0b;
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(236, 72, 153, 0.16), transparent 31%),
+    radial-gradient(circle at 88% 18%, rgba(20, 184, 166, 0.18), transparent 32%),
+    radial-gradient(circle at 74% 88%, rgba(245, 158, 11, 0.11), transparent 30%),
+    linear-gradient(135deg, #fff7fb 0%, #effbf9 54%, #fffaf0 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-chat {
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(236, 72, 153, 0.14), transparent 31%),
+    radial-gradient(circle at 88% 18%, rgba(20, 184, 166, 0.14), transparent 32%),
+    radial-gradient(circle at 74% 88%, rgba(245, 158, 11, 0.09), transparent 30%),
+    linear-gradient(135deg, #0d070b 0%, #07100f 54%, #0e0c07 100%);
+}
+
+.cy-app-shell.page-theme-student-resources {
+  --cy-accent: #0ea5e9;
+  --cy-accent-2: #10b981;
+  --cy-accent-3: #f43f5e;
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(14, 165, 233, 0.20), transparent 31%),
+    radial-gradient(circle at 88% 16%, rgba(16, 185, 129, 0.15), transparent 31%),
+    radial-gradient(circle at 70% 88%, rgba(244, 63, 94, 0.10), transparent 30%),
+    linear-gradient(135deg, #f4fbff 0%, #f0fbf6 52%, #fff7fa 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-student-resources {
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(14, 165, 233, 0.16), transparent 31%),
+    radial-gradient(circle at 88% 16%, rgba(16, 185, 129, 0.12), transparent 31%),
+    radial-gradient(circle at 70% 88%, rgba(244, 63, 94, 0.08), transparent 30%),
+    linear-gradient(135deg, #070b0d 0%, #08100c 52%, #0d0709 100%);
+}
+
+.cy-app-shell.page-theme-teacher {
+  --cy-accent: #a855f7;
+  --cy-accent-2: #0ea5e9;
+  --cy-accent-3: #10b981;
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(168, 85, 247, 0.18), transparent 31%),
+    radial-gradient(circle at 90% 18%, rgba(14, 165, 233, 0.17), transparent 32%),
+    radial-gradient(circle at 72% 88%, rgba(16, 185, 129, 0.10), transparent 30%),
+    linear-gradient(135deg, #fbf7ff 0%, #eef8ff 52%, #f4fbf7 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-teacher {
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(168, 85, 247, 0.16), transparent 31%),
+    radial-gradient(circle at 90% 18%, rgba(14, 165, 233, 0.14), transparent 32%),
+    radial-gradient(circle at 72% 88%, rgba(16, 185, 129, 0.08), transparent 30%),
+    linear-gradient(135deg, #0b0710 0%, #071017 52%, #07100b 100%);
+}
+
+.cy-app-shell.page-theme-sandbox {
+  --cy-accent: #7c3aed;
+  --cy-accent-2: #06b6d4;
+  --cy-accent-3: #fb923c;
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(124, 58, 237, 0.17), transparent 31%),
+    radial-gradient(circle at 88% 16%, rgba(6, 182, 212, 0.16), transparent 32%),
+    radial-gradient(circle at 72% 86%, rgba(251, 146, 60, 0.12), transparent 31%),
+    linear-gradient(135deg, #faf7ff 0%, #eefbff 50%, #fff7f0 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-sandbox {
+  --cy-page-bg:
+    radial-gradient(circle at 10% 12%, rgba(124, 58, 237, 0.15), transparent 31%),
+    radial-gradient(circle at 88% 16%, rgba(6, 182, 212, 0.13), transparent 32%),
+    radial-gradient(circle at 72% 86%, rgba(251, 146, 60, 0.10), transparent 31%),
+    linear-gradient(135deg, #0b0810 0%, #071012 50%, #100b07 100%);
+}
+
+.cy-app-shell.page-theme-profile {
+  --cy-accent: #f43f5e;
+  --cy-accent-2: #22c55e;
+  --cy-accent-3: #0ea5e9;
+  --cy-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(244, 63, 94, 0.16), transparent 31%),
+    radial-gradient(circle at 88% 18%, rgba(34, 197, 94, 0.14), transparent 32%),
+    radial-gradient(circle at 72% 88%, rgba(14, 165, 233, 0.12), transparent 31%),
+    linear-gradient(135deg, #fff7f9 0%, #f2fbf4 52%, #f4fbff 100%);
+}
+
+[data-theme="dark"] .cy-app-shell.page-theme-profile {
+  --cy-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(244, 63, 94, 0.14), transparent 31%),
+    radial-gradient(circle at 88% 18%, rgba(34, 197, 94, 0.11), transparent 32%),
+    radial-gradient(circle at 72% 88%, rgba(14, 165, 233, 0.09), transparent 31%),
+    linear-gradient(135deg, #0e0709 0%, #08100a 52%, #070c0e 100%);
+}
+
+.cy-main-layout,
+.cy-route-content {
+  background: var(--cy-page-bg);
+}
+
+.cy-route-content {
+  min-height: calc(100vh - 64px);
+  padding: 24px;
+  color: var(--cy-text-soft);
+  transition: background 0.3s ease;
+}
+
+.cy-app-header.ant-layout-header {
+  background: var(--cy-header-bg) !important;
+  border-bottom-color: var(--cy-header-border) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme="dark"] .cy-app-header.ant-layout-header {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30);
+}
+
+.cy-app-sider.ant-layout-sider {
+  background: var(--cy-sider-bg) !important;
+  border-right: 1px solid var(--cy-sider-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.cy-app-sider .ant-layout-sider-children,
+.cy-app-sider .ant-menu {
+  background: transparent !important;
+}
+
+.cy-app-sider .ant-menu {
+  border-inline-end: 0 !important;
+  padding: 0 8px;
+}
+
+.cy-app-sider .ant-menu-item {
+  width: 100%;
+  margin-inline: 0;
+  border-radius: 8px;
+}
+
+.cy-app-sider .ant-menu-item-selected {
+  background: linear-gradient(90deg, var(--cy-accent), var(--cy-accent-2)) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--cy-accent) 24%, transparent);
+}
+
+.cy-app-sider .ant-menu-item-selected .anticon,
+.cy-app-sider .ant-menu-item-selected .ant-menu-title-content {
+  color: #fff !important;
+}
+
+.cy-route-content .ant-card {
+  background: var(--cy-card-bg);
+  border-color: var(--cy-card-border);
+  border-radius: 14px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="dark"] .cy-route-content .ant-card {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26);
+}
+
+.cy-route-content .ant-card-head {
+  border-bottom-color: var(--cy-card-border);
+}
+
+.cy-route-content .ant-table-wrapper .ant-table,
+.cy-route-content .ant-table-wrapper .ant-table-container,
+.cy-route-content .ant-table-wrapper .ant-table-thead > tr > th,
+.cy-route-content .ant-table-wrapper .ant-table-tbody > tr > td {
+  background: transparent;
+}
+
+.cy-route-content .ant-table-wrapper .ant-table-thead > tr > th {
+  border-bottom-color: var(--cy-card-border);
+}
+
+.cy-route-content .ant-table-wrapper .ant-table-tbody > tr > td {
+  border-bottom-color: color-mix(in srgb, var(--cy-card-border) 80%, transparent);
+}
+
+@media (max-width: 768px) {
+  .cy-route-content {
+    padding: 16px;
+  }
+}

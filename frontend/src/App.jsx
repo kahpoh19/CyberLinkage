@@ -50,6 +50,19 @@ const DISCO_COLORS = [
   '#00cfff', '#bf00ff', '#ff69b4', '#ff6600',
 ]
 
+function getPageThemeKey(pathname) {
+  if (pathname === '/') return 'dashboard'
+  if (pathname.startsWith('/diagnosis')) return 'diagnosis'
+  if (pathname.startsWith('/graph')) return 'graph'
+  if (pathname.startsWith('/path')) return 'path'
+  if (pathname.startsWith('/chat')) return 'chat'
+  if (pathname.startsWith('/student-resources')) return 'student-resources'
+  if (pathname.startsWith('/teacher')) return 'teacher'
+  if (pathname.startsWith('/sandbox')) return 'sandbox'
+  if (pathname.startsWith('/profile')) return 'profile'
+  return 'dashboard'
+}
+
 function TeacherOnlyRoute({ children }) {
   const { user, isAuthenticated } = useUserStore()
   if (isAuthenticated() && !user) {
@@ -238,9 +251,13 @@ export default function App() {
   ]
 
   const subjectOptions = SUBJECTS.map(s => ({ value: s.id, label: s.label }))
+  const pageThemeKey = getPageThemeKey(location.pathname)
 
   return (
-    <Layout style={{ minHeight: '100vh', position: 'relative' }}>
+    <Layout
+      className={`cy-app-shell page-theme-${pageThemeKey}`}
+      style={{ minHeight: '100vh', position: 'relative' }}
+    >
       <div
         ref={overlayRef}
         style={{
@@ -303,6 +320,7 @@ export default function App() {
       `}</style>
 
       <Sider
+        className="cy-app-sider"
         breakpoint="lg"
         width={SIDER_WIDTH}
         collapsedWidth={SIDER_COLLAPSED_WIDTH}
@@ -325,16 +343,19 @@ export default function App() {
         />
       </Sider>
 
-      <Layout style={{ marginLeft: siderWidth, minHeight: '100vh', transition: 'margin-left 0.2s' }}>
-        <Header style={{
-          background: isDark ? '#141414' : '#fff',
+      <Layout
+        className="cy-main-layout"
+        style={{ marginLeft: siderWidth, minHeight: '100vh', transition: 'margin-left 0.2s' }}
+      >
+        <Header className="cy-app-header" style={{
+          background: 'var(--cy-header-bg)',
           padding: '0 24px',
           display: 'flex',
           flexWrap: 'wrap',
           gap: 12,
           justifyContent: 'space-between',
           alignItems: 'center',
-          borderBottom: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
+          borderBottom: '1px solid var(--cy-header-border)',
           position: 'relative',
           zIndex: 10,
           height: 'auto',
@@ -418,7 +439,7 @@ export default function App() {
           </div>
         </Header>
 
-        <Content style={{ margin: '24px', minHeight: 280 }}>
+        <Content className="cy-route-content" style={{ minHeight: 280 }}>
           <Routes>
             <Route path="/"                    element={<Dashboard />} />
             <Route path="/diagnosis"           element={<Diagnosis />} />
