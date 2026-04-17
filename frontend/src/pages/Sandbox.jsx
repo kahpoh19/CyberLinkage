@@ -605,7 +605,8 @@ export default function Sandbox() {
             }
             const next = [...prev.filter(p => p.angle !== angleDeg), newPoint]
               .sort((a, b) => a.angle - b.angle)
-            return next.length > 180 ? next.slice(-180) : next
+            // return next.length > 180 ? next.slice(-180) : next
+            return next
           })
         }
 
@@ -665,16 +666,20 @@ export default function Sandbox() {
     let joints = [], links = []
 
     if (name === 'fourbar') {
-      // 四连杆：O-A-B-D，满足 Grashof 条件（曲柄可整周转动）
-      const O = { id: newId(), x: -120, y: 0, fixed: true }
-      const D = { id: newId(), x: 120,  y: 0, fixed: true }
-      const A = { id: newId(), x: -80,  y: 80, driven: true, pivotId: O.id, radius: dist2D({ x: -80, y: 80 }, O) }
-      const B = { id: newId(), x: 80,   y: 70, _isOutput: true }
+      // Grashof: s+l <= p+q  =>  50+200 <= 160+110  =>  250 <= 270 ✓
+      // O and D are ground pivots, 200 apart
+      const O = { id: newId(), x: -100, y: 0, fixed: true }
+      const D = { id: newId(), x:  100, y: 0, fixed: true }
+      // A is crank end: radius=50 from O, initial theta=90deg
+      const A = { id: newId(), x: -100, y: 50, driven: true, pivotId: null, radius: 50 }
+      // B is coupler-rocker joint, positioned so coupler=160, rocker=110
+      const B = { id: newId(), x: 60, y: 90, _isOutput: true }
+      A.pivotId = O.id
       joints = [O, D, A, B]
       links = [
-        { id: newId(), aId: O.id, bId: A.id, length: dist2D(O, A) },
-        { id: newId(), aId: A.id, bId: B.id, length: dist2D(A, B) },
-        { id: newId(), aId: D.id, bId: B.id, length: dist2D(D, B) },
+        { id: newId(), aId: O.id, bId: A.id, length: 50 },
+        { id: newId(), aId: A.id, bId: B.id, length: 160 },
+        { id: newId(), aId: D.id, bId: B.id, length: 110 },
       ]
     } else if (name === 'slider') {
       // Fix 2: 曲柄滑块，3 个节点，2 根杆
@@ -780,15 +785,15 @@ export default function Sandbox() {
       if (jIdx >= 0) {
         const j = joints[jIdx]
         let nx = w.x, ny = w.y
-        if (j.constraintType === 'SLIDER' && j._axisDir) {
-          const ao = j._axisOrigin ?? { x: j.x, y: j.y }
-          const ad = j._axisDir
-          const dx = w.x - ao.x, dy = w.y - ao.y
-          const tParam = dx * ad.x + dy * ad.y
-          nx = ao.x + tParam * ad.x
-          ny = ao.y + tParam * ad.y
+        
+        if (j.constraintType === 'SLIDER') {
+          // Allow free 2D translation of the entire slider track in edit mode
+          nx = w.x
+          ny = w.y
+          joints[jIdx] = { ...j, x: nx, y: ny, _axisOrigin: { x: nx, y: ny } }
+        } else {
+          joints[jIdx] = { ...j, x: nx, y: ny }
         }
-        joints[jIdx] = { ...j, x: nx, y: ny }
         linksRef.current = linksRef.current.map(lk => {
           if (!lk) return lk
           if (lk.aId !== draggingRef.current.id && lk.bId !== draggingRef.current.id) return lk
@@ -959,27 +964,47 @@ export default function Sandbox() {
   const outputJoint = state.joints.find(j => j._isOutput)
   const drivenJoint = state.joints.find(j => j.driven)
 
-  const staticCurveData = useMemo(() => {
-    if (!locked || !drivenJoint || !outputJoint) return []
-    try {
-      return computeDisplacementCurveSafe(
-        jointsRef.current.map(j => ({ ...j })),
-        linksRef.current.map(l => ({ ...l })),
-        drivenJoint.id,
-        outputJoint.id
-      )
-    } catch { return [] }
-  }, [state.joints.length, state.links.length, locked])
+// Stable snapshot for locked curve — recompute when locked, dimension changes,
+// or any joint position / link length changes
+const jointSnapshot = JSON.stringify(
+  state.joints.map(j => ({ id: j?.id, x: j?.x, y: j?.y, fixed: j?.fixed, driven: j?.driven, radius: j?.radius }))
+)
+const linkSnapshot = JSON.stringify(
+  state.links.map(l => ({ id: l?.id, aId: l?.aId, bId: l?.bId, length: l?.length }))
+)
 
-  // Fix 1: Chart data — locked uses static 0-360°, live uses accumulated
-  const chartData = locked ? staticCurveData : liveChartData
+const staticCurveData = useMemo(() => {
+  if (!drivenJoint || !outputJoint) return []
+  try {
+    return computeDisplacementCurveSafe(
+      jointsRef.current.map(j => ({ ...j })),
+      linksRef.current.map(l => ({ ...l })),
+      drivenJoint.id,
+      outputJoint.id
+    )
+  } catch { return [] }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [chartDimension, jointSnapshot, linkSnapshot])
+
+  // It will only use the slow, dot-by-dot live tracking if you press Play.
+  const chartData = staticCurveData
   const chartKey = chartDimension  // y-axis key to plot
 
   const currentAngleDeg = Math.round((thetaRef.current * 180) / Math.PI) % 360
 
   // ── DOF ───────────────────────────────────────────────────────
 
-  const dof = solverDOF(state.joints, state.links)
+  // ── DOF ───────────────────────────────────────────────────────
+
+  // Fix: Accurate Point-Mass DOF Calculation
+  const movingJoints = state.joints.filter(j => j && !j.fixed)
+  const totalFreeDOF = movingJoints.length * 2 // Each free point has X and Y freedom
+  
+  const linkConstraints = state.links.filter(l => l).length // Each link locks 1 distance
+  const sliderConstraints = movingJoints.filter(j => j.constraintType === 'SLIDER').length // Each slider locks 1 axis
+  
+  const dof = totalFreeDOF - linkConstraints - sliderConstraints
+
   let dofLabel = '—', dofColor = '#94a3b8'
   if (dof !== null) {
     if      (dof <= 0)  { dofLabel = `F=${dof} 过约束`; dofColor = '#f87171' }
@@ -1373,7 +1398,9 @@ export default function Sandbox() {
                       dot={false}
                       connectNulls={false}
                       activeDot={{ r: 4, fill: chartDimension === 'x' ? clrOutput : clrOutputY }}
-                      isAnimationActive={false}
+                      isAnimationActive={true}
+                      animationDuration={300}
+                      animationEasing="ease-in-out"
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -1554,14 +1581,26 @@ export default function Sandbox() {
                     }}
                     onChange={e => {
                       const j = jointsRef.current.find(j => j && j.id === selJoint.id)
-                      if (j) { const v = parseFloat(e.target.value); if (isFinite(v)) { j[key] = v; dispatch({ type: 'UPDATE_JOINT', id: j.id, patch: { [key]: v } }) } }
+                      if (j) { 
+                        const v = parseFloat(e.target.value); 
+                        if (isFinite(v)) { 
+                          j[key] = v; 
+                          const patch = { [key]: v }
+                          // ✅ FIX: 如果是滑块，面板手动改坐标时，轨道锚点也要跟着平移
+                          if (j.constraintType === 'SLIDER') {
+                            j._axisOrigin = { ...j._axisOrigin, [key]: v }
+                            patch._axisOrigin = j._axisOrigin
+                          }
+                          dispatch({ type: 'UPDATE_JOINT', id: j.id, patch }) 
+                        } 
+                      }
                     }} />
                   </label>
                 ))}
                 {selJoint.constraintType === 'SLIDER' && (
                   <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: textSec }}>
                     轴角度°
-                    <input type="number" defaultValue={
+                    <input type="number" value={
                       selJoint._axisDir ? Math.round(Math.atan2(selJoint._axisDir.y, selJoint._axisDir.x) * 180 / Math.PI) : 0
                     } step="15" style={{
                       width: 72, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
@@ -1575,7 +1614,9 @@ export default function Sandbox() {
                       const j = jointsRef.current.find(j => j && j.id === selJoint.id)
                       if (j) {
                         j._axisDir = { x: Math.cos(ang), y: Math.sin(ang) }
-                        dispatch({ type: 'UPDATE_JOINT', id: j.id, patch: { _axisDir: j._axisDir } })
+                        // ✅ FIX: 将轨道的锚点重置到滑块当前的中心，保证原地旋转
+                        j._axisOrigin = { x: j.x, y: j.y }
+                        dispatch({ type: 'UPDATE_JOINT', id: j.id, patch: { _axisDir: j._axisDir, _axisOrigin: j._axisOrigin } })
                       }
                     }} />
                   </label>
