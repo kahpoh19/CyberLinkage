@@ -29,6 +29,8 @@ import { getAvatarUrl, getDisplayName } from './utils/user'
 
 const { Sider, Content, Header } = Layout
 const { Title } = Typography
+const SIDER_WIDTH = 200
+const SIDER_COLLAPSED_WIDTH = 80
 
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
@@ -143,6 +145,9 @@ export default function App() {
     openAuthModal,
   } = useUserStore()
 
+  const [siderCollapsed, setSiderCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 992
+  )
   const isDark = resolvedTheme === 'dark'
   const longPressTimer = useRef(null)
   const longPressTriggered = useRef(false)
@@ -251,10 +256,21 @@ export default function App() {
     flexWrap: 'wrap',
     lineHeight: 1,
   }
+  const siderWidth = siderCollapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH
+  const siderStyle = {
+    position: 'fixed',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    height: '100vh',
+    overflowY: 'auto',
+    zIndex: 20,
+    ...(discoMode ? { filter: 'hue-rotate(var(--disco-hue, 0deg))' } : {}),
+  }
   const userMenuItems = [
     {
       key: 'profile',
-      disabled: true,
+      icon: <UserOutlined />,
       label: (
         <div style={{ minWidth: 120, lineHeight: 1.4 }}>
           <div style={{ fontWeight: 600 }}>{getDisplayName(user) || 'User'}</div>
@@ -344,9 +360,12 @@ export default function App() {
 
       <Sider
         breakpoint="lg"
-        collapsedWidth="80"
+        width={SIDER_WIDTH}
+        collapsedWidth={SIDER_COLLAPSED_WIDTH}
+        collapsed={siderCollapsed}
+        onCollapse={setSiderCollapsed}
         theme={isDark ? 'dark' : 'light'}
-        style={discoMode ? { filter: 'hue-rotate(var(--disco-hue, 0deg))' } : {}}
+        style={siderStyle}
       >
         <div style={{ padding: '16px', textAlign: 'center' }}>
           <Title level={4} style={{ margin: 0, color: discoMode ? '#ff0080' : '#1677ff', transition: 'color 0.15s' }}>
@@ -362,7 +381,13 @@ export default function App() {
         />
       </Sider>
 
-      <Layout>
+      <Layout
+        style={{
+          marginLeft: siderWidth,
+          minHeight: '100vh',
+          transition: 'margin-left 0.2s',
+        }}
+      >
         <Header style={{
           background: isDark ? '#141414' : '#fff',
           padding: '0 24px',
@@ -418,6 +443,7 @@ export default function App() {
                   menu={{
                     items: userMenuItems,
                     onClick: ({ key }) => {
+                      if (key === 'profile') navigate('/profile')
                       if (key === 'logout') handleLogout()
                     },
                   }}
