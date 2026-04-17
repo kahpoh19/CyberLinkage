@@ -9,7 +9,6 @@ import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
 import LogoutOutlined from '@ant-design/icons/es/icons/LogoutOutlined'
 import SunOutlined from '@ant-design/icons/es/icons/SunOutlined'
 import MoonOutlined from '@ant-design/icons/es/icons/MoonOutlined'
-import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
 import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
 import ToolOutlined from '@ant-design/icons/es/icons/ToolOutlined'
 import FileTextOutlined from '@ant-design/icons/es/icons/FileTextOutlined'
@@ -232,22 +231,16 @@ export default function App() {
     navigate('/')
   }
 
-  const currentThemeLabel = theme === 'auto'
-    ? `Auto（当前 ${isDark ? 'Dark' : 'Light'}）`
-    : theme === 'light'
-      ? 'Light'
-      : 'Dark'
-  const nextThemeLabel = theme === 'auto' ? 'Light' : theme === 'light' ? 'Dark' : 'Auto'
+  const currentThemeLabel = isDark ? 'Dark' : 'Light'
+  const nextThemeLabel = isDark ? 'Light' : 'Dark'
   const themeButtonTitle = discoMode
     ? 'DISCO!'
     : `${currentThemeLabel}，点击切换到 ${nextThemeLabel}，长按开启 DISCO MODE`
   const themeButtonIcon = discoMode
     ? <span style={{ fontSize: 18 }}>🪩</span>
-    : theme === 'auto'
-      ? <SyncOutlined style={{ fontSize: 18, color: '#1677ff' }} />
-      : theme === 'light'
-        ? <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
-        : <MoonOutlined style={{ fontSize: 18, color: '#f0f0f0' }} />
+    : isDark
+      ? <MoonOutlined style={{ fontSize: 18, color: '#f0f0f0' }} />
+      : <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
   const headerIconButtonStyle = {
     display: 'inline-flex',
     alignItems: 'center',
