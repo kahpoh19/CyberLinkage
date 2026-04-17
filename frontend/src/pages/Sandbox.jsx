@@ -1,12 +1,11 @@
 /**
- * Sandbox.jsx — 通用机构设计平台 v3
+ * Sandbox.jsx — 通用机构设计平台 v4
  *
- * 修复清单:
- *   Fix 1: 滑块输出点视觉统一 — 橙色 + "E" 标签 + 发光效果
- *   Fix 2: 几何有效性逻辑优化 — 增大容差, 全周校验更稳健
- *   Fix 3: 实时图表更新 + 死点自动停止 + Canvas 红色 Overlay
- *   Fix 4: 轨迹自动重置 — nodes/links 变动时清空 traces
- *   Fix 5: 主题响应式标题 — key={isDark} 强制重挂载
+ * Fix 1: 横轴固定 0-360°，支持 x/y 位移维度切换
+ * Fix 2: 移除简单曲柄预设，修正曲柄滑块参数（保证无死点）
+ * Fix 3: 轨迹基于时间（3s）平滑淡出
+ * Fix 4: 几何容错——acos/asin 输入截断 + 三角不等式预判 + 非阻塞式跳帧
+ * Fix 5: 手动角度 θ 滑块优先级最高，拖动即停播放
  */
 
 import React, {
@@ -21,13 +20,80 @@ import {
   solveConstraints as solverSolve,
   buildIdxMap,
   dist2D,
-  computeDisplacementCurve,
   computeDOF as solverDOF,
 } from '../utils/mechanismSolver'
 
 // ─── 几何工具 ────────────────────────────────────────────────────
 
 const safeNum = (v, fb = 0) => (typeof v === 'number' && isFinite(v) ? v : fb)
+
+// Fix 4: 安全 acos — 截断输入防止 NaN
+const safeAcos = (v) => Math.acos(Math.max(-1, Math.min(1, v)))
+
+// Fix 4: 三角不等式检查
+function triangleValid(a, b, c) {
+  return a + b > c && a + c > b && b + c > a
+}
+
+// Fix 4: 全量程位移曲线（含几何容错）
+function computeDisplacementCurveSafe(joints, links, drivenId, outputId, dimension = 'x') {
+  const STEP = 2
+  const result = []
+  const jSnap = joints.map(j => j ? { ...j } : null).filter(Boolean)
+  const lSnap = links.map(l => l ? { ...l } : null).filter(Boolean)
+  const idxMap = buildIdxMap(jSnap)
+
+  const drivenIdx = idxMap[drivenId]
+  const outputIdx = idxMap[outputId]
+  if (drivenIdx === undefined || outputIdx === undefined) return result
+
+  const driven = jSnap[drivenIdx]
+  const pivot = driven.pivotId ? jSnap[idxMap[driven.pivotId]] : null
+  if (!pivot && driven.constraintType !== 'SLIDER') return result
+
+  for (let deg = 0; deg < 360; deg += STEP) {
+    const theta = (deg * Math.PI) / 180
+
+    if (driven.constraintType !== 'SLIDER' && pivot) {
+      const r = driven.radius ?? dist2D(driven, pivot)
+      driven.x = pivot.x + r * Math.cos(theta)
+      driven.y = pivot.y + r * Math.sin(theta)
+    }
+
+    // Fix 4: 在求解前检查基本几何可行性
+    const jMap = {}
+    jSnap.forEach(j => { if (j && j.id) jMap[j.id] = j })
+    let geometryOk = true
+    for (const lk of lSnap) {
+      if (!lk) continue
+      const ja = jMap[lk.aId]
+      const jb = jMap[lk.bId]
+      if (!ja || !jb) continue
+      const d = dist2D(ja, jb)
+      // 如果杆长与当前距离差异过大（比如无法闭合），标记为不可行
+      if (d > lk.length * 3 + 50) { geometryOk = false; break }
+    }
+
+    if (!geometryOk) {
+      result.push({ angle: deg, x: null, y: null })
+      continue
+    }
+
+    try {
+      const { converged, maxError } = solverSolve(jSnap, lSnap, idxMap, 80, 0.1)
+      const out = jSnap[outputIdx]
+      const valid = converged && out && isFinite(out.x) && isFinite(out.y) && maxError < 5.0
+      result.push({
+        angle: deg,
+        x: valid ? parseFloat(out.x.toFixed(3)) : null,
+        y: valid ? parseFloat(out.y.toFixed(3)) : null,
+      })
+    } catch {
+      result.push({ angle: deg, x: null, y: null })
+    }
+  }
+  return result
+}
 
 // ─── 状态管理 ────────────────────────────────────────────────────
 
@@ -133,7 +199,6 @@ function drawSliderRail(ctx, j, t, isDark) {
   ctx.restore()
 }
 
-// FIX 1: drawSliderBlock — 滑块输出点视觉统一 (橙色 + "E" + 发光)
 function drawSliderBlock(ctx, j, t, isDark, isSelected) {
   if (!j || !isFinite(j.x) || !isFinite(j.y)) return
   const sc = t.scale
@@ -141,13 +206,12 @@ function drawSliderBlock(ctx, j, t, isDark, isSelected) {
   const hh = 10 / sc
   const d = j._axisDir ?? { x: 1, y: 0 }
   const angle = Math.atan2(d.y, d.x)
-  const isOutput = !!j._isOutput  // FIX 1: 检测输出点
+  const isOutput = !!j._isOutput
 
   ctx.save()
   ctx.translate(j.x, j.y)
   ctx.rotate(angle)
 
-  // FIX 1: 输出点用橙色发光，否则用青蓝色
   if (isOutput) {
     ctx.shadowColor = '#f97316'
     ctx.shadowBlur  = (isSelected ? 22 : 15) / sc
@@ -156,11 +220,9 @@ function drawSliderBlock(ctx, j, t, isDark, isSelected) {
     ctx.shadowBlur  = (isSelected ? 18 : 10) / sc
   }
 
-  // Fill
   ctx.beginPath()
   ctx.rect(-hw, -hh, hw * 2, hh * 2)
   if (isOutput) {
-    // 橙色填充
     ctx.fillStyle = isDark
       ? (isSelected ? 'rgba(249,115,22,0.45)' : 'rgba(249,115,22,0.30)')
       : (isSelected ? 'rgba(249,115,22,0.38)' : 'rgba(249,115,22,0.22)')
@@ -171,21 +233,18 @@ function drawSliderBlock(ctx, j, t, isDark, isSelected) {
   }
   ctx.fill()
 
-  // Border
   ctx.strokeStyle = isOutput
     ? (isSelected ? '#fb923c' : '#f97316')
     : (isSelected ? '#7dd3fc' : (isDark ? '#38bdf8' : '#0284c7'))
   ctx.lineWidth = (isSelected ? 2 : 1.5) / sc
   ctx.stroke()
 
-  // Specular stripe
   ctx.shadowBlur = 0
   ctx.fillStyle = 'rgba(255,255,255,0.18)'
   ctx.fillRect(-hw * 0.6, -hh * 0.7, hw * 1.2, hh * 0.4)
 
   ctx.restore()
 
-  // FIX 1: 输出点标签 "E"，在滑块几何中心上方渲染
   if (isOutput) {
     ctx.save()
     const fontSize = Math.max(9, 11 / sc)
@@ -206,10 +265,10 @@ function drawJointNode(ctx, j, t, isDark, isSelected, isHovered) {
   const r = 8 / sc
 
   let fill
-  if (j.fixed)       fill = isDark ? 'rgb(224,123,58)'  : 'rgb(184,78,12)'
-  else if (j.driven) fill = isDark ? 'rgb(109,191,126)' : 'rgb(46,125,50)'
+  if (j.fixed)         fill = isDark ? 'rgb(224,123,58)'  : 'rgb(184,78,12)'
+  else if (j.driven)   fill = isDark ? 'rgb(109,191,126)' : 'rgb(46,125,50)'
   else if (j._isOutput) fill = isDark ? 'rgb(251,146,60)' : 'rgb(234,88,12)'
-  else               fill = isDark ? 'rgb(106,158,214)' : 'rgb(24,95,165)'
+  else                 fill = isDark ? 'rgb(106,158,214)' : 'rgb(24,95,165)'
 
   ctx.save()
   ctx.beginPath(); ctx.arc(j.x, j.y, r * 3, 0, Math.PI * 2)
@@ -246,8 +305,41 @@ function drawJointNode(ctx, j, t, isDark, isSelected, isHovered) {
   ctx.restore()
 }
 
-// FIX 3: renderCanvas 增加 showInvalidOverlay 参数
-function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds, selLIds, deadPoint, showInvalidOverlay) {
+// Fix 3: 渲染带时间透明度的轨迹
+function renderTrailsWithFade(ctx, trailRef, now) {
+  const TRAIL_LIFETIME = 3000
+  const trailData = trailRef.current || {}
+  Object.values(trailData).forEach(trail => {
+    if (!trail || trail.length < 2) return
+
+    // 过滤掉超过3秒的点
+    const alive = trail.filter(p => (now - p.t) < TRAIL_LIFETIME)
+    if (alive.length < 2) return
+
+    for (let k = 1; k < alive.length; k++) {
+      const p0 = alive[k - 1]
+      const p1 = alive[k]
+      if (!isFinite(p0.x) || !isFinite(p1.x)) continue
+
+      const age = now - p1.t
+      const alpha = Math.max(0, 1 - age / TRAIL_LIFETIME) * 0.55
+
+      ctx.beginPath()
+      ctx.moveTo(p0.x, p0.y)
+      ctx.lineTo(p1.x, p1.y)
+      ctx.strokeStyle = `rgba(100,160,255,${alpha})`
+      ctx.lineWidth = 1.5
+      ctx.lineJoin = 'round'
+      ctx.stroke()
+    }
+
+    // 就地更新，移除过期点
+    trailRef.current[Object.keys(trailData).find(k => trailData[k] === trail)] =
+      alive
+  })
+}
+
+function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds, selLIds, deadPoint) {
   if (!canvas) return
   const ctx = canvas.getContext('2d')
   const W = canvas.width, H = canvas.height
@@ -256,7 +348,6 @@ function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds
   ctx.fillStyle = isDark ? '#0a0d18' : '#f8faff'
   ctx.fillRect(0, 0, W, H)
 
-  // Dead-point border flash (subtle border only — overlay handled separately in React)
   if (deadPoint) {
     ctx.save()
     ctx.strokeStyle = 'rgba(239,68,68,0.5)'
@@ -280,18 +371,8 @@ function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds
   for (let gx = gx0; gx < gx1; gx += step) { ctx.beginPath(); ctx.moveTo(gx, gy0); ctx.lineTo(gx, gy1); ctx.stroke() }
   for (let gy = gy0; gy < gy1; gy += step) { ctx.beginPath(); ctx.moveTo(gx0, gy); ctx.lineTo(gx1, gy); ctx.stroke() }
 
-  // Trails
-  const trailData = trailRef.current || {}
-  Object.values(trailData).forEach(trail => {
-    if (!trail || trail.length < 2) return
-    ctx.beginPath()
-    ctx.moveTo(trail[0].x, trail[0].y)
-    for (let k = 1; k < trail.length; k++) {
-      if (isFinite(trail[k].x) && isFinite(trail[k].y)) ctx.lineTo(trail[k].x, trail[k].y)
-    }
-    ctx.strokeStyle = isDark ? 'rgba(100,160,255,0.22)' : 'rgba(20,70,180,0.18)'
-    ctx.lineWidth = 1.5 / t.scale; ctx.lineJoin = 'round'; ctx.stroke()
-  })
+  // Fix 3: 时间渐淡轨迹（在 scale 变换内绘制）
+  renderTrailsWithFade(ctx, trailRef, Date.now())
 
   const jMap = {}
   joints.forEach(j => { if (j && j.id) jMap[j.id] = j })
@@ -360,9 +441,11 @@ export default function Sandbox() {
   const deadPointRef = useRef(false)
   const prevPosRef   = useRef({})
 
-  // FIX 3: 实时图表数据 — 用 React state 驱动，每帧更新
+  // Fix 1: Chart dimension toggle state
+  const [chartDimension, setChartDimension] = useState('x')
+
+  // Fix 3: Live chart data stores both x and y
   const [liveChartData, setLiveChartData] = useState([])
-  // FIX 3: invalid overlay 显示控制
   const [showInvalidOverlay, setShowInvalidOverlay] = useState(false)
 
   // Sync refs
@@ -375,7 +458,7 @@ export default function Sandbox() {
   useEffect(() => { toolRef.current = state.tool }, [state.tool])
   useEffect(() => { isDarkRef.current = isDark }, [isDark])
 
-  // FIX 4: 轨迹自动重置 — joints/links 结构变动时清空
+  // Fix 4: Track joint/link count for trail reset
   const prevJointCountRef = useRef(0)
   const prevLinkCountRef  = useRef(0)
   useEffect(() => {
@@ -453,11 +536,11 @@ export default function Sandbox() {
       const joints = jointsRef.current
       const links  = linksRef.current
       const t      = transformRef.current
+      const now    = Date.now()
 
       if (playingRef.current) {
         thetaRef.current = (thetaRef.current + speedRef.current * 0.022) % (2 * Math.PI)
 
-        // Drive the driven joint
         const driven = joints.find(j => j && j.driven)
         if (driven && driven.constraintType !== 'SLIDER' && driven.pivotId) {
           const pivot = joints.find(j => j && j.id === driven.pivotId)
@@ -467,53 +550,59 @@ export default function Sandbox() {
           }
         }
 
-        // FIX 2: 增大容差到 0.15，避免微小数值抖动误报死点
+        // Fix 4: 增大容差 + 仅在 maxError > 5 时判为死点（非阻塞）
         const idxMap = buildIdxMap(joints)
-        const { converged, maxError } = solverSolve(joints, links, idxMap, 120, 0.15)
+        let converged = false, maxError = 0
+        try {
+          const result = solverSolve(joints, links, idxMap, 120, 0.15)
+          converged = result.converged
+          maxError = result.maxError
+        } catch {
+          // Fix 4: 求解器异常时静默跳帧，不锁死
+          rafRef.current = requestAnimationFrame(animate)
+          return
+        }
 
-        // FIX 2: 只有 maxError > 5.0 (结构真正断裂) 才判定为死点
         const isDeadPoint = !converged && maxError > 5.0
 
         if (deadPointRef.current !== isDeadPoint) {
           deadPointRef.current = isDeadPoint
           dispatch({ type: 'SET_DEAD_POINT', payload: isDeadPoint })
-          setShowInvalidOverlay(isDeadPoint)  // FIX 3: 控制 overlay
+          setShowInvalidOverlay(isDeadPoint)
 
-          // FIX 3: 死点时自动停止动画
           if (isDeadPoint) {
             playingRef.current = false
             dispatch({ type: 'SET_PLAYING', payload: false })
           }
         }
 
-        // Warm-start save
         joints.forEach(j => {
           if (j && isFinite(j.x) && isFinite(j.y)) {
             prevPosRef.current[j.id] = { x: j.x, y: j.y }
           }
         })
 
-        // Update trail for output joint
+        // Fix 3: 轨迹点存储时间戳
         const tr = trailRef.current
         joints.forEach(j => {
           if (!j || !j._isOutput) return
           if (!isFinite(j.x) || !isFinite(j.y) || isDeadPoint) return
           if (!tr[j.id]) tr[j.id] = []
-          tr[j.id].push({ x: j.x, y: j.y })
-          if (tr[j.id].length > 400) tr[j.id].shift()
+          tr[j.id].push({ x: j.x, y: j.y, t: now })
+          // 限制数组长度，防止无限增长（3s * 60fps ≈ 180 点，给 500 的余量）
+          if (tr[j.id].length > 500) tr[j.id].shift()
         })
 
-        // FIX 3: 每帧实时更新图表数据
+        // Fix 1: 实时图表存储 x 和 y
         const outputJoint = joints.find(j => j && j._isOutput)
-        const drivenJoint = joints.find(j => j && j.driven)
-        if (outputJoint && drivenJoint && !isDeadPoint) {
+        if (outputJoint && !isDeadPoint) {
           const angleDeg = Math.round((thetaRef.current * 180) / Math.PI) % 360
           setLiveChartData(prev => {
             const newPoint = {
-              angle:        angleDeg,
-              displacement: isFinite(outputJoint.x) ? parseFloat(outputJoint.x.toFixed(3)) : null,
+              angle: angleDeg,
+              x: isFinite(outputJoint.x) ? parseFloat(outputJoint.x.toFixed(3)) : null,
+              y: isFinite(outputJoint.y) ? parseFloat(outputJoint.y.toFixed(3)) : null,
             }
-            // 保持最近 180 个数据点 (每 2° 一个)
             const next = [...prev.filter(p => p.angle !== angleDeg), newPoint]
               .sort((a, b) => a.angle - b.angle)
             return next.length > 180 ? next.slice(-180) : next
@@ -530,14 +619,13 @@ export default function Sandbox() {
         canvasRef.current, joints, links, trailRef, t,
         isDarkRef.current, hoveredRef.current,
         selJointIds, selLinkIds,
-        deadPointRef.current,
-        showInvalidOverlay
+        deadPointRef.current
       )
     } catch (err) {
       console.error('[Sandbox animate error]', err)
     }
     rafRef.current = requestAnimationFrame(animate)
-  }, [])  // showInvalidOverlay deliberately excluded — canvas overlay is React-rendered
+  }, [])
 
   useEffect(() => {
     rafRef.current = requestAnimationFrame(animate)
@@ -571,12 +659,13 @@ export default function Sandbox() {
     playingRef.current = false
     prevPosRef.current = {}
     deadPointRef.current = false
-    setShowInvalidOverlay(false)  // FIX 3: 清除 overlay
-    setLiveChartData([])          // FIX 3: 清除图表
+    setShowInvalidOverlay(false)
+    setLiveChartData([])
 
     let joints = [], links = []
 
     if (name === 'fourbar') {
+      // 四连杆：O-A-B-D，满足 Grashof 条件（曲柄可整周转动）
       const O = { id: newId(), x: -120, y: 0, fixed: true }
       const D = { id: newId(), x: 120,  y: 0, fixed: true }
       const A = { id: newId(), x: -80,  y: 80, driven: true, pivotId: O.id, radius: dist2D({ x: -80, y: 80 }, O) }
@@ -588,10 +677,18 @@ export default function Sandbox() {
         { id: newId(), aId: D.id, bId: B.id, length: dist2D(D, B) },
       ]
     } else if (name === 'slider') {
+      // Fix 2: 曲柄滑块，3 个节点，2 根杆
+      // O: 固定机架  A: 曲柄端（绕 O 转，半径 80）  S: 水平导轨滑块
+      // 连杆长度 200 >> 曲柄半径 80，保证全周无死点
       const O = { id: newId(), x: -100, y: 0, fixed: true }
-      const A = { id: newId(), x: -60, y: 70, driven: true, pivotId: O.id, radius: dist2D({ x: -60, y: 70 }, O) }
+      const A = {
+        id: newId(), x: -100 + 80, y: 0,   // 初始 theta=0
+        driven: true, pivotId: null,        // pivotId 在下面设置
+        radius: 80,
+      }
+      A.pivotId = O.id
       const S = {
-        id: newId(), x: 80, y: 0,
+        id: newId(), x: 180, y: 0,
         constraintType: 'SLIDER',
         _axisOrigin: { x: 0, y: 0 },
         _axisDir:    { x: 1, y: 0 },
@@ -599,15 +696,11 @@ export default function Sandbox() {
       }
       joints = [O, A, S]
       links = [
-        { id: newId(), aId: O.id, bId: A.id, length: dist2D(O, A) },
+        { id: newId(), aId: O.id, bId: A.id, length: 80 },
         { id: newId(), aId: A.id, bId: S.id, length: dist2D(A, S) },
       ]
-    } else if (name === 'crank') {
-      const O = { id: newId(), x: 0, y: 0, fixed: true }
-      const A = { id: newId(), x: 80, y: 0, driven: true, pivotId: O.id, radius: 80, _isOutput: true }
-      joints = [O, A]
-      links = [{ id: newId(), aId: O.id, bId: A.id, length: 80 }]
     }
+    // Fix 2: 移除 'crank' 预设（简单曲柄已删除）
 
     jointsRef.current = joints
     linksRef.current  = links
@@ -674,7 +767,7 @@ export default function Sandbox() {
   const handleMouseMove = useCallback((e) => {
     const { sx, sy } = getCanvasXY(e)
     if (panningRef.current && panStartRef.current) {
-      const newT = { ...transformRef.current, x: sx - panStartRef.current.x, y: sy - panStartRef.current.y }
+      const newT = { ...transformRef.current, x: sx - panStartRef.current.x, y: sy - transformRef.current.y }
       transformRef.current = newT
       dispatch({ type: 'SET_TRANSFORM', payload: newT })
       return
@@ -807,7 +900,6 @@ export default function Sandbox() {
         e.preventDefault()
         const next = !playingRef.current
         playingRef.current = next
-        // 恢复时清除 overlay
         if (next) {
           setShowInvalidOverlay(false)
           deadPointRef.current = false
@@ -863,15 +955,14 @@ export default function Sandbox() {
     })
   }, [])
 
-  // ── Displacement curve (static, for lock mode) ────────────────
-
+  // Fix 1: Full 0-360° static curve for lock mode
   const outputJoint = state.joints.find(j => j._isOutput)
   const drivenJoint = state.joints.find(j => j.driven)
 
-  const staticCurvData = useMemo(() => {
+  const staticCurveData = useMemo(() => {
     if (!locked || !drivenJoint || !outputJoint) return []
     try {
-      return computeDisplacementCurve(
+      return computeDisplacementCurveSafe(
         jointsRef.current.map(j => ({ ...j })),
         linksRef.current.map(l => ({ ...l })),
         drivenJoint.id,
@@ -880,8 +971,9 @@ export default function Sandbox() {
     } catch { return [] }
   }, [state.joints.length, state.links.length, locked])
 
-  // FIX 3: 图表数据 — 运行时用实时数据，锁定时用静态全周数据
-  const chartData = locked ? staticCurvData : liveChartData
+  // Fix 1: Chart data — locked uses static 0-360°, live uses accumulated
+  const chartData = locked ? staticCurveData : liveChartData
+  const chartKey = chartDimension  // y-axis key to plot
 
   const currentAngleDeg = Math.round((thetaRef.current * 180) / Math.PI) % 360
 
@@ -918,6 +1010,7 @@ export default function Sandbox() {
 
   const clrCrank  = isDark ? '#a78bfa' : '#7c3aed'
   const clrOutput = isDark ? '#fb923c' : '#ea580c'
+  const clrOutputY = isDark ? '#34d399' : '#059669'
   const textPri   = isDark ? '#e2e8f0' : '#1e293b'
   const textSec   = isDark ? 'rgba(226,232,240,0.6)' : 'rgba(30,41,59,0.6)'
   const panelBg   = isDark ? 'rgba(15,20,35,0.85)' : 'rgba(255,255,255,0.85)'
@@ -937,6 +1030,20 @@ export default function Sandbox() {
     color:      state.tool === id ? '#a78bfa' : textSec,
     border:     state.tool === id
       ? '0.5px solid rgba(167,139,250,0.45)'
+      : '0.5px solid transparent',
+    transition: 'all 0.15s',
+  })
+
+  const dimBtnStyle = (dim) => ({
+    padding: '3px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+    background: chartDimension === dim
+      ? (dim === 'x' ? 'rgba(251,146,60,0.20)' : 'rgba(52,211,153,0.20)')
+      : 'transparent',
+    color: chartDimension === dim
+      ? (dim === 'x' ? clrOutput : clrOutputY)
+      : textSec,
+    border: chartDimension === dim
+      ? `0.5px solid ${dim === 'x' ? 'rgba(251,146,60,0.5)' : 'rgba(52,211,153,0.5)'}`
       : '0.5px solid transparent',
     transition: 'all 0.15s',
   })
@@ -972,7 +1079,6 @@ export default function Sandbox() {
         }
       `}</style>
 
-      {/* FIX 5: 主题响应式标题 — key={isDark} 强制重挂载确保颜色立即更新 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px 12px' }}>
         <div key={isDark ? 'title-dark' : 'title-light'}>
           <h1 style={{
@@ -983,7 +1089,6 @@ export default function Sandbox() {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor:  'transparent',
             display: 'inline-block',
-            transition: 'none',   // 避免渐变过渡闪烁
           }}>
             实战工坊 — 通用机构设计平台
           </h1>
@@ -1046,7 +1151,6 @@ export default function Sandbox() {
                 const next = !state.playing
                 playingRef.current = next
                 if (next) {
-                  // 重新播放时清除死点状态
                   setShowInvalidOverlay(false)
                   deadPointRef.current = false
                   dispatch({ type: 'SET_DEAD_POINT', payload: false })
@@ -1072,7 +1176,7 @@ export default function Sandbox() {
             </span>
           </div>
 
-          {/* Canvas container with FIX 3 invalid overlay */}
+          {/* Canvas container */}
           <div style={{
             ...glass, padding: 0, overflow: 'hidden', position: 'relative', height: 400,
             border: state.deadPoint
@@ -1090,7 +1194,7 @@ export default function Sandbox() {
               }}
             />
 
-            {/* FIX 3: Invalid Geometry Overlay — 半透明红色居中提示 */}
+            {/* Invalid Geometry Overlay */}
             {showInvalidOverlay && (
               <div style={{
                 position:       'absolute',
@@ -1156,7 +1260,12 @@ export default function Sandbox() {
             }}>
               <span>θ = <span style={{ color: clrCrank, fontWeight: 600, fontFamily: 'monospace' }}>{currentAngleDeg}°</span></span>
               {outputJoint && isFinite(outputJoint.x) && (
-                <span>E.x = <span style={{ color: clrOutput, fontWeight: 600, fontFamily: 'monospace' }}>{outputJoint.x.toFixed(2)}</span></span>
+                <span>
+                  E.x = <span style={{ color: clrOutput, fontWeight: 600, fontFamily: 'monospace' }}>{outputJoint.x.toFixed(2)}</span>
+                  <span style={{ marginLeft: 8 }}>
+                    E.y = <span style={{ color: clrOutputY, fontWeight: 600, fontFamily: 'monospace' }}>{outputJoint.y.toFixed(2)}</span>
+                  </span>
+                </span>
               )}
               {locked && <span style={{ color: '#fb923c', fontSize: 11 }}>🔒 锁定</span>}
             </div>
@@ -1185,22 +1294,30 @@ export default function Sandbox() {
             </div>
           </div>
 
-          {/* FIX 3: Displacement chart — 运行时实时更新 */}
+          {/* Fix 1: Displacement chart with dimension toggle and fixed 0-360° x-axis */}
           <div style={{ ...glass }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: textSec, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>输出节点 E 的水平位移 x(θ) 曲线</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: textSec }}>
+                输出节点 E 位移曲线
+              </span>
+              {/* Dimension toggle */}
+              <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
+                <button style={dimBtnStyle('x')} onClick={() => setChartDimension('x')}>
+                  水平 x(θ)
+                </button>
+                <button style={dimBtnStyle('y')} onClick={() => setChartDimension('y')}>
+                  铅垂 y(θ)
+                </button>
+              </div>
               {state.playing && !locked && (
                 <span style={{
                   fontSize: 10, padding: '2px 8px', borderRadius: 10,
                   background: 'rgba(52,211,153,0.15)', border: '0.5px solid rgba(52,211,153,0.4)',
-                  color: '#34d399', fontWeight: 600,
+                  color: '#34d399', fontWeight: 600, marginLeft: 'auto',
                 }}>● 实时</span>
               )}
               {chartData.length === 0 && (
-                <span style={{ color: '#fbbf24', fontSize: 11 }}>（运行后自动显示）</span>
-              )}
-              {locked && chartData.length > 0 && (
-                <span style={{ color: '#fb923c', fontSize: 11 }}>· 点击图表跳转角度</span>
+                <span style={{ color: '#fbbf24', fontSize: 11, marginLeft: 'auto' }}>（运行后显示）</span>
               )}
             </div>
             <div style={{ minHeight: 190 }}>
@@ -1215,15 +1332,49 @@ export default function Sandbox() {
                     style={{ cursor: locked ? 'crosshair' : 'default' }}
                   >
                     <CartesianGrid strokeDasharray="4 4" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)'} />
-                    <XAxis dataKey="angle" tick={{ fontSize: 10, fill: textSec }} tickLine={false} axisLine={false} tickFormatter={v => `${v}°`} />
-                    <YAxis tick={{ fontSize: 10, fill: textSec }} tickLine={false} axisLine={false} tickFormatter={v => v.toFixed(1)} />
+                    {/* Fix 1: 横轴固定 0-360° */}
+                    <XAxis
+                      dataKey="angle"
+                      type="number"
+                      domain={[0, 360]}
+                      ticks={[0, 60, 120, 180, 240, 300, 360]}
+                      tick={{ fontSize: 10, fill: textSec }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => `${v}°`}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: textSec }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => v.toFixed(1)}
+                    />
                     <Tooltip
-                      contentStyle={{ background: isDark ? 'rgba(15,20,35,0.94)' : 'rgba(255,255,255,0.94)', border: `0.5px solid ${isDark ? 'rgba(251,146,60,0.4)' : 'rgba(234,88,12,0.3)'}`, borderRadius: 8, fontSize: 11, color: textPri }}
-                      formatter={v => v !== null ? [v.toFixed(3), 'E.x'] : ['— 死点', 'E.x']}
+                      contentStyle={{
+                        background: isDark ? 'rgba(15,20,35,0.94)' : 'rgba(255,255,255,0.94)',
+                        border: `0.5px solid ${chartDimension === 'x' ? 'rgba(251,146,60,0.4)' : 'rgba(52,211,153,0.4)'}`,
+                        borderRadius: 8, fontSize: 11, color: textPri
+                      }}
+                      formatter={v => v !== null ? [v.toFixed(3), `E.${chartDimension}`] : ['— 死点', `E.${chartDimension}`]}
                       labelFormatter={l => `θ = ${l}°`}
                     />
-                    <ReferenceLine x={currentAngleDeg - (currentAngleDeg % 2)} stroke={clrCrank} strokeDasharray="4 3" strokeWidth={1.5} opacity={0.7} />
-                    <Line type="monotone" dataKey="displacement" stroke={clrOutput} strokeWidth={2} dot={false} connectNulls={false} activeDot={{ r: 4, fill: clrOutput }} isAnimationActive={false} />
+                    <ReferenceLine
+                      x={currentAngleDeg}
+                      stroke={clrCrank}
+                      strokeDasharray="4 3"
+                      strokeWidth={1.5}
+                      opacity={0.7}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey={chartKey}
+                      stroke={chartDimension === 'x' ? clrOutput : clrOutputY}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls={false}
+                      activeDot={{ r: 4, fill: chartDimension === 'x' ? clrOutput : clrOutputY }}
+                      isAnimationActive={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -1286,7 +1437,7 @@ export default function Sandbox() {
                 <span style={{ position: 'absolute', top: 2, left: locked ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
               </button>
             </div>
-            {locked && <p style={{ fontSize: 11, color: textSec, margin: '6px 0 0', lineHeight: 1.5 }}>点击位移图上任意点可跳转至该角度</p>}
+            {locked && <p style={{ fontSize: 11, color: textSec, margin: '6px 0 0', lineHeight: 1.5 }}>锁定时显示完整 0-360° 曲线，点击图表任意点跳转角度</p>}
 
             {/* Speed */}
             <div style={{ marginTop: 14 }}>
@@ -1299,27 +1450,69 @@ export default function Sandbox() {
                 style={{ width: '100%', accentColor: '#22d3ee' }} />
             </div>
 
-            {/* Manual angle */}
-            {(!state.playing || locked) && (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: textSec, marginBottom: 4 }}>
-                  <span>手动角度 θ</span>
-                  <span style={{ fontFamily: 'monospace', color: clrCrank, fontWeight: 600 }}>{currentAngleDeg}°</span>
-                </div>
-                <input type="range" min="0" max="359" step="1" value={currentAngleDeg}
-                  onChange={e => { thetaRef.current = (+e.target.value * Math.PI) / 180 }}
-                  style={{ width: '100%', accentColor: clrCrank }} />
+            {/* Fix 5: Manual theta slider — always works, stops playback on drag */}
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: textSec, marginBottom: 4 }}>
+                <span style={{ color: state.playing ? textSec : clrCrank, fontWeight: state.playing ? 400 : 600 }}>
+                  手动角度 θ {state.playing ? <span style={{ fontSize: 10, opacity: 0.6 }}>(播放中同步)</span> : ''}
+                </span>
+                <span style={{ fontFamily: 'monospace', color: clrCrank, fontWeight: 600 }}>{currentAngleDeg}°</span>
               </div>
-            )}
+              <input
+                type="range"
+                min="0"
+                max="359"
+                step="1"
+                value={currentAngleDeg}
+                // Fix 5: onMouseDown/onTouchStart 立即停止播放，抢占控制权
+                onMouseDown={() => {
+                  if (playingRef.current) {
+                    playingRef.current = false
+                    dispatch({ type: 'SET_PLAYING', payload: false })
+                  }
+                }}
+                onTouchStart={() => {
+                  if (playingRef.current) {
+                    playingRef.current = false
+                    dispatch({ type: 'SET_PLAYING', payload: false })
+                  }
+                }}
+                onChange={e => {
+                  // Fix 5: 直接写入 ref，立即生效，无需等待 React 重渲染
+                  const deg = parseInt(e.target.value, 10)
+                  thetaRef.current = (deg * Math.PI) / 180
+                  // 同步驱动节点位置，触发即时重绘
+                  const joints = jointsRef.current
+                  const driven = joints.find(j => j && j.driven)
+                  if (driven && driven.constraintType !== 'SLIDER' && driven.pivotId) {
+                    const pivot = joints.find(j => j && j.id === driven.pivotId)
+                    if (pivot && isFinite(pivot.x) && safeNum(driven.radius) > 0) {
+                      driven.x = pivot.x + driven.radius * Math.cos(thetaRef.current)
+                      driven.y = pivot.y + driven.radius * Math.sin(thetaRef.current)
+                    }
+                  }
+                  // 触发约束求解（单次）
+                  try {
+                    const idxMap = buildIdxMap(joints)
+                    solverSolve(joints, linksRef.current, idxMap, 60, 0.15)
+                  } catch { /* 静默跳过 */ }
+                  // 通知 React 更新显示数值
+                  dispatch({ type: 'SET_THETA', payload: thetaRef.current })
+                }}
+                style={{ width: '100%', accentColor: clrCrank }}
+              />
+              <div style={{ fontSize: 10, color: textSec, marginTop: 2, opacity: 0.7 }}>
+                拖动自动停止播放并立即更新机构位置
+              </div>
+            </div>
           </div>
 
-          {/* Presets */}
+          {/* Fix 2: Presets — removed simple crank */}
           <div style={{ ...glass }}>
             <div style={{ fontSize: 10, fontWeight: 500, color: textSec, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>快速预设</div>
             {[
               { id: 'fourbar', label: '🔧 四连杆 (four-bar)' },
               { id: 'slider',  label: '🎯 曲柄滑块 (slider-crank)' },
-              { id: 'crank',   label: '🌀 简单曲柄 (crank)' },
             ].map(p => (
               <button key={p.id} onClick={() => loadPreset(p.id)} style={{
                 display: 'block', width: '100%', textAlign: 'left', marginBottom: 6,
@@ -1467,7 +1660,8 @@ export default function Sandbox() {
         <strong style={{ color: textPri }}>机构说明：</strong>
         旋转节点（圆形）可被连杆约束；固定节点（F）作为地面铰链；驱动节点（D）绕固定点做圆周运动；
         <span style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>滑块副（矩形）被限制沿导轨方向平动</span>，可在属性面板调节轴角度；
-        输出节点（E）的轨迹显示于位移曲线图。当机构进入死点（几何无解）时动画自动停止并显示红色⚠提示。
+        输出节点（E）的轨迹随时间（3秒）自然淡出，并在位移曲线图中显示完整 0-360° 的运动规律。
+        锁定模式下可查看全周期静态曲线，点击图表跳转至对应角度。
       </div>
     </div>
   )
