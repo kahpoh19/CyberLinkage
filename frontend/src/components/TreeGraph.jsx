@@ -36,6 +36,7 @@ export default function TreeGraph({ graphData, onNodeClick }) {
           `<b style="color:${tokens.bg}">${d.name}</b>`,
           `掌握度：<span style="color:${tokens.bg};font-weight:600">${mStr}</span>`,
           `难度：${'⭐'.repeat(d._raw.difficulty || 3)}`,
+          `<span style="color:${isDark ? '#bfbfbf' : '#666'}">点击查看详情</span>`,
         ].join('<br/>')
       },
     },
@@ -43,14 +44,20 @@ export default function TreeGraph({ graphData, onNodeClick }) {
       type: 'tree',
       data: treeData,
       orient: 'LR',
-      left: '5%',
-      right: '20%',
-      top: '5%',
-      bottom: '5%',
+      left: '8%',
+      right: '8%',
+      top: '8%',
+      bottom: '8%',
+      roam: true,
+      zoom: 1,
+      scaleLimit: {
+        min: 0.4,
+        max: 3,
+      },
       expandAndCollapse: true,
       animationDuration: 300,
       animationDurationUpdate: 300,
-      // series 级别的 label 作为「默认」；节点级别的 label 会覆盖它
+
       label: {
         position: 'inside',
         fontSize: 11,
@@ -80,11 +87,9 @@ export default function TreeGraph({ graphData, onNodeClick }) {
     }],
   }), [treeData, isDark, theme])
 
-  const handleClick = useCallback((params) => {
-    if (params.dataType === 'node' && params.data._raw) {
-      onNodeClick?.(params.data._raw)
-    }
-  }, [onNodeClick])
+  const handleClick = useCallback(() => {
+    // 单击节点交给 ECharts tree 自己处理展开 / 收起
+  }, [])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -104,7 +109,6 @@ export default function TreeGraph({ graphData, onNodeClick }) {
         ref={chartRef}
         option={option}
         style={{ width: '100%', height: '100%' }}
-        onEvents={{ click: handleClick }}
         notMerge={true}
       />
     </div>

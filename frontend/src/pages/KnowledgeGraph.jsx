@@ -67,7 +67,7 @@ export default function KnowledgeGraph() {
         <Tag color="#999">⚪ 未测试</Tag>
         <span style={{ marginLeft: 16, fontSize: 12, color: '#999' }}>
           {viewMode === 'tree'
-            ? '💡 点击节点可展开 / 收起子知识点，再次点击查看详情'
+            ? '💡 拖动画布 / 滚轮缩放，点击知识点查看详情'
             : '💡 拖动画布 / 滚轮缩放，点击知识点查看详情'}
         </span>
       </div>
