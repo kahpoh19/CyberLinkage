@@ -1,32 +1,41 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Card, Drawer, Descriptions, Tag, Spin, Typography, Segmented, message, Empty } from 'antd'
 import ApartmentOutlined from '@ant-design/icons/es/icons/ApartmentOutlined'
 import RadarChartOutlined from '@ant-design/icons/es/icons/RadarChartOutlined'
 import TreeGraph from '../components/TreeGraph'
 import RadialGraph from '../components/RadialGraph'
 import { getGraph } from '../api'
+import useUserStore, { SUBJECTS } from '../store/userStore'
 
 const { Title } = Typography
 
 export default function KnowledgeGraph() {
+  const currentSubject = useUserStore((s) => s.currentSubject)
+  const subjectLabel = SUBJECTS.find(s => s.id === currentSubject)?.label || currentSubject
+
   const [graphData, setGraphData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectedNode, setSelectedNode] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [viewMode, setViewMode] = useState('tree') // 'tree' | 'radial'
+  const [viewMode, setViewMode] = useState('tree')
 
-  useEffect(() => { loadGraph() }, [])
-
-  const loadGraph = async () => {
+  const loadGraph = useCallback(async () => {
+    setLoading(true)
+    setGraphData(null)
     try {
-      const res = await getGraph('c_language')
+      const res = await getGraph(currentSubject)
       setGraphData(res.data)
     } catch (error) {
-      console.error("图谱加载失败:", error)
-      message.error("无法加载知识图谱数据，请检查网络或后端状态")
+      console.error('图谱加载失败:', error)
+      message.error('无法加载知识图谱数据，请检查网络或后端状态')
+    } finally {
+      setLoading(false)
     }
-    finally { setLoading(false) }
-  }
+  }, [currentSubject])
+
+  useEffect(() => {
+    loadGraph()
+  }, [loadGraph])
 
   const handleNodeClick = (node) => {
     setSelectedNode(node)
@@ -38,34 +47,35 @@ export default function KnowledgeGraph() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>🗺️ C语言知识图谱</Title>
-          <Segmented
-            value={viewMode}
-            onChange={setViewMode}
-            options={[
-              { label: '树状图', value: 'tree', icon: <ApartmentOutlined /> },
-              { label: '环状图', value: 'radial', icon: <RadarChartOutlined /> },
-            ]}
-          />
+        <Title level={4} style={{ margin: 0 }}>
+          🗺️ {subjectLabel} 知识图谱
+        </Title>
+        <Segmented
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { label: '树状图', value: 'tree', icon: <ApartmentOutlined /> },
+            { label: '环状图', value: 'radial', icon: <RadarChartOutlined /> },
+          ]}
+        />
       </div>
 
       <div style={{ marginBottom: 16 }}>
-      <Tag color="#ff4d4f">🔴 薄弱</Tag>
-      <Tag color="#faad14">🟡 学习中</Tag>
-      <Tag color="#52c41a">🟢 已掌握</Tag>
-      <Tag color="#999">⚪ 未测试</Tag>
-      <span style={{ marginLeft: 16, fontSize: 12, color: '#999' }}>
-        {viewMode === 'tree'
-          ? '💡 点击节点可展开 / 收起子知识点，再次点击查看详情'
-          : '💡 拖动画布 / 滚轮缩放，点击知识点查看详情'}
-      </span>
-    </div>
+        <Tag color="#ff4d4f">🔴 薄弱</Tag>
+        <Tag color="#faad14">🟡 学习中</Tag>
+        <Tag color="#52c41a">🟢 已掌握</Tag>
+        <Tag color="#999">⚪ 未测试</Tag>
+        <span style={{ marginLeft: 16, fontSize: 12, color: '#999' }}>
+          {viewMode === 'tree'
+            ? '💡 点击节点可展开 / 收起子知识点，再次点击查看详情'
+            : '💡 拖动画布 / 滚轮缩放，点击知识点查看详情'}
+        </span>
+      </div>
 
       <Card style={{ height: 'calc(100vh - 280px)' }} bodyStyle={{ height: '100%', padding: 0 }}>
-        {/* Check if data exists AND has nodes */}
         {!graphData || !graphData.nodes || graphData.nodes.length === 0 ? (
           <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-            <Empty description="暂无图谱数据或加载失败" />
+            <Empty description={`「${subjectLabel}」暂无图谱数据`} />
           </div>
         ) : viewMode === 'tree' ? (
           <TreeGraph graphData={graphData} onNodeClick={handleNodeClick} />

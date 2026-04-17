@@ -5,13 +5,15 @@ import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
 import FireOutlined from '@ant-design/icons/es/icons/FireOutlined'
 import TrophyOutlined from '@ant-design/icons/es/icons/TrophyOutlined'
 import RadarChart from '../components/RadarChart'
-import useUserStore from '../store/userStore'
+import useUserStore, { SUBJECTS } from '../store/userStore'
 import { getReport, getProgress, getMe } from '../api'
 
 const { Title, Paragraph } = Typography
 
 export default function Dashboard() {
-  const { user, isAuthenticated, setUser, openAuthModal } = useUserStore()
+  const { user, isAuthenticated, setUser, openAuthModal, currentSubject } = useUserStore()
+  const subjectLabel = SUBJECTS.find(s => s.id === currentSubject)?.label || currentSubject
+
   const [summary, setSummary] = useState(null)
   const [progress, setProgress] = useState([])
 
@@ -19,7 +21,7 @@ export default function Dashboard() {
     if (isAuthenticated()) {
       loadData()
     }
-  }, [user])
+  }, [user, currentSubject])
 
   const loadData = async () => {
     try {
@@ -52,7 +54,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <Title level={4}>👋 你好，{user?.username || '同学'}！</Title>
+      <Title level={4}>👋 你好，{user?.username || '同学'}！当前科目：{subjectLabel}</Title>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>

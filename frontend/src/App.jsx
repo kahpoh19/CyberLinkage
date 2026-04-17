@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown } from 'antd'
+import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown, Select } from 'antd'
 import DashboardOutlined from '@ant-design/icons/es/icons/DashboardOutlined'
 import ExperimentOutlined from '@ant-design/icons/es/icons/ExperimentOutlined'
 import ApartmentOutlined from '@ant-design/icons/es/icons/ApartmentOutlined'
@@ -13,6 +13,7 @@ import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
 import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
 import ToolOutlined from '@ant-design/icons/es/icons/ToolOutlined'
 import FileTextOutlined from '@ant-design/icons/es/icons/FileTextOutlined'
+import ReadOutlined from '@ant-design/icons/es/icons/ReadOutlined'
 
 import Dashboard from './pages/Dashboard'
 import Diagnosis from './pages/Diagnosis'
@@ -21,7 +22,7 @@ import LearningPath from './pages/LearningPath'
 import Chat from './pages/Chat'
 import TeacherUpload from './pages/TeacherUpload'
 import StudentResources from './pages/StudentResources'
-import useUserStore from './store/userStore'
+import useUserStore, { SUBJECTS } from './store/userStore'
 import { login, register, getMe } from './api'
 import Sandbox from './pages/Sandbox'
 import Profile from './pages/Profile'
@@ -52,19 +53,12 @@ const DISCO_COLORS = [
 
 function TeacherOnlyRoute({ children }) {
   const { user, isAuthenticated } = useUserStore()
-
   if (isAuthenticated() && !user) {
-    return (
-      <div style={{ textAlign: 'center', marginTop: 100 }}>
-        正在验证身份...
-      </div>
-    )
+    return <div style={{ textAlign: 'center', marginTop: 100 }}>正在验证身份...</div>
   }
-
   return user?.role === 'teacher' ? children : <Navigate to="/" replace />
 }
 
-// ── Auth Modal ────────────────────────────────────────────────────────────────
 function AuthModal() {
   const { showAuthModal, closeAuthModal, login: storeLogin, setUser } = useUserStore()
   const [isRegister, setIsRegister] = useState(false)
@@ -110,7 +104,6 @@ function AuthModal() {
         <Form.Item name="password" label="密码" rules={[{ required: true, min: 6, message: '密码至少6位' }]}>
           <Input.Password />
         </Form.Item>
-
         {isRegister && (
           <Form.Item name="role" label="身份">
             <Radio.Group>
@@ -119,7 +112,6 @@ function AuthModal() {
             </Radio.Group>
           </Form.Item>
         )}
-
         <Button type="primary" htmlType="submit" block>
           {isRegister ? '注册' : '登录'}
         </Button>
@@ -135,16 +127,10 @@ export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
   const {
-    user,
-    logout,
-    setUser,
-    isAuthenticated,
-    theme,
-    resolvedTheme,
-    toggleTheme,
-    discoMode,
-    activateDisco,
-    openAuthModal,
+    user, logout, setUser, isAuthenticated,
+    theme, resolvedTheme, toggleTheme,
+    discoMode, activateDisco, openAuthModal,
+    currentSubject, setCurrentSubject,
   } = useUserStore()
 
   const [siderCollapsed, setSiderCollapsed] = useState(
@@ -158,11 +144,6 @@ export default function App() {
   const hasToken = isAuthenticated()
   const isTeacher = user?.role === 'teacher'
 
-  // ── Sidebar visibility rules ──────────────────────────────────────────────
-  // /teacher           → teachers only
-  // /student-resources → non-teachers (students + guests)
-  // /profile           → authenticated users only
-  // everything else    → always visible
   const visibleMenuItems = menuItems.filter((item) => {
     if (item.key === '/teacher')           return isTeacher
     if (item.key === '/student-resources') return !isTeacher
@@ -172,23 +153,13 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false
-
     if (!hasToken || user) return undefined
-
     getMe()
-      .then((res) => {
-        if (!cancelled) setUser(res.data)
-      })
-      .catch(() => {
-        if (!cancelled) logout()
-      })
-
-    return () => {
-      cancelled = true
-    }
+      .then((res) => { if (!cancelled) setUser(res.data) })
+      .catch(() => { if (!cancelled) logout() })
+    return () => { cancelled = true }
   }, [hasToken, user, setUser, logout])
 
-  // Disco color flash loop
   useEffect(() => {
     if (discoMode) {
       let i = 0
@@ -213,30 +184,17 @@ export default function App() {
       activateDisco()
     }, 800)
   }
-
-  const handleThemePressEnd = () => {
-    clearTimeout(longPressTimer.current)
-  }
-
+  const handleThemePressEnd = () => clearTimeout(longPressTimer.current)
   const handleThemeClick = () => {
     clearTimeout(longPressTimer.current)
-    if (longPressTriggered.current) {
-      longPressTriggered.current = false
-      return
-    }
+    if (longPressTriggered.current) { longPressTriggered.current = false; return }
     toggleTheme()
   }
-
-  const handleLogout = () => {
-    logout()
-    navigate('/')
-  }
+  const handleLogout = () => { logout(); navigate('/') }
 
   const currentThemeLabel = theme === 'auto'
     ? `Auto（当前 ${isDark ? 'Dark' : 'Light'}）`
-    : theme === 'light'
-      ? 'Light'
-      : 'Dark'
+    : theme === 'light' ? 'Light' : 'Dark'
   const nextThemeLabel = theme === 'auto' ? 'Light' : theme === 'light' ? 'Dark' : 'Auto'
   const themeButtonTitle = discoMode
     ? 'DISCO!'
@@ -248,34 +206,9 @@ export default function App() {
       : theme === 'light'
         ? <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
         : <MoonOutlined style={{ fontSize: 18, color: '#f0f0f0' }} />
-  const headerIconButtonStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 32,
-    height: 32,
-    lineHeight: 1,
-    padding: 0,
-    borderRadius: '50%',
-  }
-  const headerActionsStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-    lineHeight: 1,
-  }
+
   const siderWidth = siderCollapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH
-  const siderStyle = {
-    position: 'fixed',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    height: '100vh',
-    overflowY: 'auto',
-    zIndex: 20,
-    ...(discoMode ? { filter: 'hue-rotate(var(--disco-hue, 0deg))' } : {}),
-  }
+
   const userMenuItems = [
     {
       key: 'profile',
@@ -290,44 +223,31 @@ export default function App() {
       ),
     },
     { type: 'divider' },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: '退出登录',
-    },
+    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
   ]
+
+  const subjectOptions = SUBJECTS.map(s => ({ value: s.id, label: s.label }))
 
   return (
     <Layout style={{ minHeight: '100vh', position: 'relative' }}>
-
-      {/* Disco overlay */}
       <div
         ref={overlayRef}
         style={{
-          position: 'fixed', inset: 0,
-          opacity: 0,
+          position: 'fixed', inset: 0, opacity: 0,
           pointerEvents: discoMode ? 'auto' : 'none',
-          zIndex: 9999,
-          transition: 'background 0.12s ease, opacity 0.3s ease',
-          mixBlendMode: 'screen',
-          cursor: discoMode ? 'pointer' : 'default',
+          zIndex: 9999, transition: 'background 0.12s ease, opacity 0.3s ease',
+          mixBlendMode: 'screen', cursor: discoMode ? 'pointer' : 'default',
         }}
-        onClick={() => {
-          if (discoMode) useUserStore.getState().deactivateDisco()
-        }}
+        onClick={() => { if (discoMode) useUserStore.getState().deactivateDisco() }}
       />
 
       {discoMode && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0,
-          zIndex: 10000, textAlign: 'center',
-          padding: '6px 0',
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000,
+          textAlign: 'center', padding: '6px 0',
           background: 'linear-gradient(90deg,#ff0080,#ffd700,#00ff88,#00cfff,#bf00ff,#ff0080)',
-          backgroundSize: '200% 100%',
-          animation: 'discoSlide 1s linear infinite',
-          fontSize: 14, fontWeight: 600, color: '#fff',
-          letterSpacing: 4,
-          pointerEvents: 'none',
+          backgroundSize: '200% 100%', animation: 'discoSlide 1s linear infinite',
+          fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: 4, pointerEvents: 'none',
         }}>
           🕺 DISCO MODE 🕺
         </div>
@@ -335,36 +255,40 @@ export default function App() {
 
       {discoMode && (
         <div style={{
-          position: 'fixed',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9998,
-          pointerEvents: 'none',
+          position: 'fixed', inset: 0, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 9998, pointerEvents: 'none',
         }}>
-          <img
-            src="/disco.gif"
-            alt="disco"
-            style={{ width: 320, borderRadius: 16, opacity: 0.92 }}
-          />
+          <img src="/disco.gif" alt="disco" style={{ width: 320, borderRadius: 16, opacity: 0.92 }} />
         </div>
       )}
 
       <style>{`
-        @keyframes discoSlide {
-          0% { background-position: 0% 50%; }
-          100% { background-position: 200% 50%; }
-        }
+        @keyframes discoSlide { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
         @keyframes discoPulse {
           0%, 100% { transform: scale(1) rotate(0deg); }
           25% { transform: scale(1.3) rotate(-15deg); }
           75% { transform: scale(1.3) rotate(15deg); }
         }
-        .disco-btn-icon {
-          animation: ${discoMode ? 'discoPulse 0.4s ease-in-out infinite' : 'none'};
-          display: inline-flex;
+        .disco-btn-icon { animation: ${discoMode ? 'discoPulse 0.4s ease-in-out infinite' : 'none'}; display: inline-flex; }
+
+        .subject-selector .ant-select-selector {
+          background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(22,119,255,0.04)'} !important;
+          border: 1px solid ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(22,119,255,0.25)'} !important;
+          border-radius: 8px !important;
+          color: ${isDark ? '#e2e8f0' : '#1e293b'} !important;
+          transition: border-color 0.2s, background 0.2s !important;
         }
+        .subject-selector .ant-select-selector:hover,
+        .subject-selector.ant-select-focused .ant-select-selector {
+          border-color: #1677ff !important;
+          background: ${isDark ? 'rgba(22,119,255,0.12)' : 'rgba(22,119,255,0.08)'} !important;
+        }
+        .subject-selector .ant-select-selection-item {
+          color: ${isDark ? '#e2e8f0' : '#1e293b'} !important;
+          font-weight: 500;
+          font-size: 13px;
+        }
+        .subject-selector .ant-select-arrow { color: ${isDark ? 'rgba(255,255,255,0.45)' : '#1677ff'} !important; }
       `}</style>
 
       <Sider
@@ -374,7 +298,7 @@ export default function App() {
         collapsed={siderCollapsed}
         onCollapse={setSiderCollapsed}
         theme={isDark ? 'dark' : 'light'}
-        style={siderStyle}
+        style={{ position: 'fixed', top: 0, bottom: 0, left: 0, height: '100vh', overflowY: 'auto', zIndex: 20 }}
       >
         <div style={{ padding: '16px', textAlign: 'center' }}>
           <Title level={4} style={{ margin: 0, color: discoMode ? '#ff0080' : '#1677ff', transition: 'color 0.15s' }}>
@@ -390,13 +314,7 @@ export default function App() {
         />
       </Sider>
 
-      <Layout
-        style={{
-          marginLeft: siderWidth,
-          minHeight: '100vh',
-          transition: 'margin-left 0.2s',
-        }}
-      >
+      <Layout style={{ marginLeft: siderWidth, minHeight: '100vh', transition: 'margin-left 0.2s' }}>
         <Header style={{
           background: isDark ? '#141414' : '#fff',
           padding: '0 24px',
@@ -412,28 +330,43 @@ export default function App() {
           minHeight: 64,
           lineHeight: 1,
         }}>
-          <Title level={5} style={{ margin: 0, lineHeight: 1.3 }}>
-            基于知识图谱的个性化学习伴侣
-          </Title>
-          <div style={headerActionsStyle}>
+          {/* Left: title + subject selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+            <Title level={5} style={{ margin: 0, lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+              基于知识图谱的个性化学习伴侣
+            </Title>
+
+            {/* Global subject selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ReadOutlined style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#1677ff', fontSize: 14, flexShrink: 0 }} />
+              <Select
+                className="subject-selector"
+                value={currentSubject}
+                onChange={setCurrentSubject}
+                options={subjectOptions}
+                style={{ width: 168 }}
+                size="small"
+                popupMatchSelectWidth={false}
+              />
+            </div>
+          </div>
+
+          {/* Right: theme toggle + user */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <Button
               type="text"
               shape="circle"
               title={themeButtonTitle}
-              aria-label={themeButtonTitle}
               onMouseDown={handleThemePressStart}
               onMouseUp={handleThemePressEnd}
               onMouseLeave={handleThemePressEnd}
               onTouchStart={handleThemePressStart}
               onTouchEnd={handleThemePressEnd}
               onClick={handleThemeClick}
-              icon={
-                <span className="disco-btn-icon">
-                  {themeButtonIcon}
-                </span>
-              }
+              icon={<span className="disco-btn-icon">{themeButtonIcon}</span>}
               style={{
-                ...headerIconButtonStyle,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 32, height: 32, lineHeight: 1, padding: 0, borderRadius: '50%',
                 transition: 'transform 0.3s ease',
                 transform: discoMode ? 'rotate(12deg)' : 'rotate(0deg)',
                 outline: discoMode ? '2px solid #ff0080' : 'none',
@@ -443,9 +376,9 @@ export default function App() {
             {isAuthenticated() ? (
               <>
                 {user?.role === 'teacher' && (
-                    <Tag color="blue" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', height: 24 }}>
-                      👨‍🏫 Teacher Mode
-                    </Tag>
+                  <Tag color="blue" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', height: 24 }}>
+                    👨‍🏫 Teacher Mode
+                  </Tag>
                 )}
                 <Dropdown
                   trigger={['click']}
@@ -461,9 +394,7 @@ export default function App() {
                     src={getAvatarUrl(user?.avatar)}
                     style={{
                       backgroundColor: discoMode ? '#ff0080' : '#1677ff',
-                      transition: 'background 0.15s',
-                      flex: '0 0 auto',
-                      cursor: 'pointer',
+                      transition: 'background 0.15s', flex: '0 0 auto', cursor: 'pointer',
                     }}
                   >
                     {!user?.avatar && (getDisplayName(user)?.[0]?.toUpperCase() || 'U')}
@@ -490,18 +421,13 @@ export default function App() {
             />
             <Route
               path="/teacher"
-              element={(
-                <TeacherOnlyRoute>
-                  <TeacherUpload />
-                </TeacherOnlyRoute>
-              )}
+              element={<TeacherOnlyRoute><TeacherUpload /></TeacherOnlyRoute>}
             />
             <Route path="/sandbox" element={<Sandbox />} />
           </Routes>
         </Content>
       </Layout>
 
-      {/* Single AuthModal instance for the whole app */}
       <AuthModal />
     </Layout>
   )

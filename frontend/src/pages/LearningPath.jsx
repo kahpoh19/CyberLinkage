@@ -1,30 +1,36 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Card, Spin, Empty, Typography, Statistic, Row, Col } from 'antd'
 import ClockCircleOutlined from '@ant-design/icons/es/icons/ClockCircleOutlined'
 import WarningOutlined from '@ant-design/icons/es/icons/WarningOutlined'
 import PathTimeline from '../components/PathTimeline'
 import { getPath } from '../api'
+import useUserStore, { SUBJECTS } from '../store/userStore'
 
 const { Title } = Typography
 
 export default function LearningPath() {
+  const currentSubject = useUserStore((s) => s.currentSubject)
+  const subjectLabel = SUBJECTS.find(s => s.id === currentSubject)?.label || currentSubject
+
   const [pathData, setPathData] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadPath()
-  }, [])
-
-  const loadPath = async () => {
+  const loadPath = useCallback(async () => {
+    setLoading(true)
+    setPathData(null)
     try {
-      const res = await getPath('c_language')
+      const res = await getPath(currentSubject)
       setPathData(res.data)
     } catch {
       // 未登录或无数据
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentSubject])
+
+  useEffect(() => {
+    loadPath()
+  }, [loadPath])
 
   if (loading) {
     return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />
@@ -33,7 +39,7 @@ export default function LearningPath() {
   if (!pathData || pathData.path.length === 0) {
     return (
       <Empty
-        description="完成诊断测评后，系统将为你生成个性化学习路径"
+        description={`「${subjectLabel}」暂无学习路径，请先完成诊断测评`}
         style={{ marginTop: 100 }}
       />
     )
@@ -41,16 +47,12 @@ export default function LearningPath() {
 
   return (
     <div>
-      <Title level={4}>🛤️ 个性化学习路径</Title>
+      <Title level={4}>🛤️ {subjectLabel} — 个性化学习路径</Title>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={8}>
           <Card>
-            <Statistic
-              title="待学习知识点"
-              value={pathData.path.length}
-              suffix="个"
-            />
+            <Statistic title="待学习知识点" value={pathData.path.length} suffix="个" />
           </Card>
         </Col>
         <Col span={8}>
