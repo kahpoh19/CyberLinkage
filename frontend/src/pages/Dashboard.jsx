@@ -13,6 +13,7 @@ const { Title, Paragraph } = Typography
 export default function Dashboard() {
   const { user, isAuthenticated, setUser, openAuthModal, currentSubject } = useUserStore()
   const subjectLabel = SUBJECTS.find(s => s.id === currentSubject)?.label || currentSubject
+  const displayName = user?.display_name || user?.displayName || user?.username || '同学'
 
   const [summary, setSummary] = useState(null)
   const [progress, setProgress] = useState([])
@@ -54,7 +55,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <Title level={4}>👋 你好，{user?.username || '同学'}！当前科目：{subjectLabel}</Title>
+      <Title level={4}>👋 你好，{displayName}！当前科目：{subjectLabel}</Title>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>

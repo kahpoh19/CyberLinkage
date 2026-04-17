@@ -68,6 +68,8 @@ export default function Profile() {
         }
     }
 
+    
+
     useEffect(() => {
         loadAll()
     }, [])
@@ -378,7 +380,7 @@ export default function Profile() {
 
                         <Form form={profileForm} layout="vertical" onFinish={handleProfileSave}>
                             <Form.Item name="display_name" label="显示名称">
-                                <Input placeholder={getDisplayName(user)} />
+                                <Input placeholder="请输入显示名称" />
                             </Form.Item>
 
                             <Form.Item name="role" label="身份">
