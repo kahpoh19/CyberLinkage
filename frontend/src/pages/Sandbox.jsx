@@ -1,12 +1,11 @@
 /**
- * Sandbox.jsx — 通用机构设计平台 v2
+ * Sandbox.jsx — 通用机构设计平台 v4
  *
- * 改进点：
- *   1. 引入 mechanismSolver.js 的鲁棒约束求解器（Gauss-Seidel + 热启动防分支跳变）
- *   2. 新增滑块副（Prismatic Joint）— 工具栏 "P" 键，渲染为霓虹矩形+导轨
- *   3. 死点检测 — 求解不收敛时画布边框闪烁红色并显示 "Invalid Geometry"
- *   4. 全部原有 UI、Pan/Zoom、锁定时刻、Recharts 曲线保留
- *   5. requestAnimationFrame 内部全 try/catch，任何数学错误都不崩渲染循环
+ * Fix 1: 横轴固定 0-360°，支持 x/y 位移维度切换
+ * Fix 2: 移除简单曲柄预设，修正曲柄滑块参数（保证无死点）
+ * Fix 3: 轨迹基于时间（3s）平滑淡出
+ * Fix 4: 几何容错——acos/asin 输入截断 + 三角不等式预判 + 非阻塞式跳帧
+ * Fix 5: 手动角度 θ 滑块优先级最高，拖动即停播放
  */
 
 import React, {
@@ -21,13 +20,80 @@ import {
   solveConstraints as solverSolve,
   buildIdxMap,
   dist2D,
-  computeDisplacementCurve,
   computeDOF as solverDOF,
 } from '../utils/mechanismSolver'
 
 // ─── 几何工具 ────────────────────────────────────────────────────
 
 const safeNum = (v, fb = 0) => (typeof v === 'number' && isFinite(v) ? v : fb)
+
+// Fix 4: 安全 acos — 截断输入防止 NaN
+const safeAcos = (v) => Math.acos(Math.max(-1, Math.min(1, v)))
+
+// Fix 4: 三角不等式检查
+function triangleValid(a, b, c) {
+  return a + b > c && a + c > b && b + c > a
+}
+
+// Fix 4: 全量程位移曲线（含几何容错）
+function computeDisplacementCurveSafe(joints, links, drivenId, outputId, dimension = 'x') {
+  const STEP = 2
+  const result = []
+  const jSnap = joints.map(j => j ? { ...j } : null).filter(Boolean)
+  const lSnap = links.map(l => l ? { ...l } : null).filter(Boolean)
+  const idxMap = buildIdxMap(jSnap)
+
+  const drivenIdx = idxMap[drivenId]
+  const outputIdx = idxMap[outputId]
+  if (drivenIdx === undefined || outputIdx === undefined) return result
+
+  const driven = jSnap[drivenIdx]
+  const pivot = driven.pivotId ? jSnap[idxMap[driven.pivotId]] : null
+  if (!pivot && driven.constraintType !== 'SLIDER') return result
+
+  for (let deg = 0; deg < 360; deg += STEP) {
+    const theta = (deg * Math.PI) / 180
+
+    if (driven.constraintType !== 'SLIDER' && pivot) {
+      const r = driven.radius ?? dist2D(driven, pivot)
+      driven.x = pivot.x + r * Math.cos(theta)
+      driven.y = pivot.y + r * Math.sin(theta)
+    }
+
+    // Fix 4: 在求解前检查基本几何可行性
+    const jMap = {}
+    jSnap.forEach(j => { if (j && j.id) jMap[j.id] = j })
+    let geometryOk = true
+    for (const lk of lSnap) {
+      if (!lk) continue
+      const ja = jMap[lk.aId]
+      const jb = jMap[lk.bId]
+      if (!ja || !jb) continue
+      const d = dist2D(ja, jb)
+      // 如果杆长与当前距离差异过大（比如无法闭合），标记为不可行
+      if (d > lk.length * 3 + 50) { geometryOk = false; break }
+    }
+
+    if (!geometryOk) {
+      result.push({ angle: deg, x: null, y: null })
+      continue
+    }
+
+    try {
+      const { converged, maxError } = solverSolve(jSnap, lSnap, idxMap, 80, 0.1)
+      const out = jSnap[outputIdx]
+      const valid = converged && out && isFinite(out.x) && isFinite(out.y) && maxError < 5.0
+      result.push({
+        angle: deg,
+        x: valid ? parseFloat(out.x.toFixed(3)) : null,
+        y: valid ? parseFloat(out.y.toFixed(3)) : null,
+      })
+    } catch {
+      result.push({ angle: deg, x: null, y: null })
+    }
+  }
+  return result
+}
 
 // ─── 状态管理 ────────────────────────────────────────────────────
 
@@ -38,7 +104,7 @@ const INITIAL_STATE = {
   joints: [],
   links: [],
   selected: [],
-  tool: 'select',       // 'select' | 'joint' | 'slider'
+  tool: 'select',
   transform: { x: 0, y: 0, scale: 1 },
   playing: false,
   theta: 0,
@@ -48,15 +114,15 @@ const INITIAL_STATE = {
 
 function reducer(state, action) {
   switch (action.type) {
-    case 'SET_TOOL':      return { ...state, tool: action.payload, selected: [] }
-    case 'SET_TRANSFORM': return { ...state, transform: action.payload }
-    case 'SET_PLAYING':   return { ...state, playing: action.payload }
-    case 'SET_THETA':     return { ...state, theta: action.payload }
-    case 'SET_SPEED':     return { ...state, speed: action.payload }
-    case 'SET_SELECTED':  return { ...state, selected: action.payload }
-    case 'SET_DEAD_POINT':return { ...state, deadPoint: action.payload }
-    case 'ADD_JOINT':     return { ...state, joints: [...state.joints, action.payload] }
-    case 'UPDATE_JOINT':  return {
+    case 'SET_TOOL':       return { ...state, tool: action.payload, selected: [] }
+    case 'SET_TRANSFORM':  return { ...state, transform: action.payload }
+    case 'SET_PLAYING':    return { ...state, playing: action.payload }
+    case 'SET_THETA':      return { ...state, theta: action.payload }
+    case 'SET_SPEED':      return { ...state, speed: action.payload }
+    case 'SET_SELECTED':   return { ...state, selected: action.payload }
+    case 'SET_DEAD_POINT': return { ...state, deadPoint: action.payload }
+    case 'ADD_JOINT':      return { ...state, joints: [...state.joints, action.payload] }
+    case 'UPDATE_JOINT':   return {
       ...state,
       joints: state.joints.map(j => j.id === action.id ? { ...j, ...action.patch } : j)
     }
@@ -64,13 +130,13 @@ function reducer(state, action) {
       const ids = new Set(action.ids)
       return {
         ...state,
-        joints: state.joints.filter(j => !ids.has(j.id)),
-        links:  state.links.filter(l => !ids.has(l.aId) && !ids.has(l.bId)),
+        joints:   state.joints.filter(j => !ids.has(j.id)),
+        links:    state.links.filter(l => !ids.has(l.aId) && !ids.has(l.bId)),
         selected: state.selected.filter(s => !(s.type === 'joint' && ids.has(s.id))),
       }
     }
-    case 'ADD_LINK':     return action.payload ? { ...state, links: [...state.links, action.payload] } : state
-    case 'UPDATE_LINK':  return {
+    case 'ADD_LINK':    return action.payload ? { ...state, links: [...state.links, action.payload] } : state
+    case 'UPDATE_LINK': return {
       ...state,
       links: state.links.map(l => l.id === action.id ? { ...l, ...action.patch } : l)
     }
@@ -78,12 +144,12 @@ function reducer(state, action) {
       const ids = new Set(action.ids)
       return {
         ...state,
-        links: state.links.filter(l => !ids.has(l.id)),
+        links:    state.links.filter(l => !ids.has(l.id)),
         selected: state.selected.filter(s => !(s.type === 'link' && ids.has(s.id))),
       }
     }
     case 'SYNC_JOINTS':  return { ...state, joints: action.payload }
-    case 'SYNC_LINKS':   return { ...state, links: action.payload }
+    case 'SYNC_LINKS':   return { ...state, links:  action.payload }
     case 'LOAD_PRESET':  return {
       ...INITIAL_STATE,
       transform: state.transform,
@@ -96,7 +162,7 @@ function reducer(state, action) {
   }
 }
 
-// ─── Canvas 渲染 ──────────────────────────────────────────────────
+// ─── Canvas 渲染工具函数 ──────────────────────────────────────────
 
 function drawNeonLine(ctx, p1, p2, color, width, scale) {
   if (!p1 || !p2) return
@@ -136,38 +202,61 @@ function drawSliderRail(ctx, j, t, isDark) {
 function drawSliderBlock(ctx, j, t, isDark, isSelected) {
   if (!j || !isFinite(j.x) || !isFinite(j.y)) return
   const sc = t.scale
-  const hw = 18 / sc   // half-width
-  const hh = 10 / sc   // half-height
+  const hw = 18 / sc
+  const hh = 10 / sc
   const d = j._axisDir ?? { x: 1, y: 0 }
   const angle = Math.atan2(d.y, d.x)
+  const isOutput = !!j._isOutput
 
   ctx.save()
   ctx.translate(j.x, j.y)
   ctx.rotate(angle)
 
-  // Glow
-  ctx.shadowColor = isDark ? '#38bdf8' : '#0ea5e9'
-  ctx.shadowBlur = isSelected ? 18 / sc : 10 / sc
+  if (isOutput) {
+    ctx.shadowColor = '#f97316'
+    ctx.shadowBlur  = (isSelected ? 22 : 15) / sc
+  } else {
+    ctx.shadowColor = isDark ? '#38bdf8' : '#0ea5e9'
+    ctx.shadowBlur  = (isSelected ? 18 : 10) / sc
+  }
 
-  // Fill
   ctx.beginPath()
   ctx.rect(-hw, -hh, hw * 2, hh * 2)
-  ctx.fillStyle = isDark
-    ? (isSelected ? 'rgba(56,189,248,0.35)' : 'rgba(14,165,233,0.22)')
-    : (isSelected ? 'rgba(14,165,233,0.30)' : 'rgba(14,165,233,0.15)')
+  if (isOutput) {
+    ctx.fillStyle = isDark
+      ? (isSelected ? 'rgba(249,115,22,0.45)' : 'rgba(249,115,22,0.30)')
+      : (isSelected ? 'rgba(249,115,22,0.38)' : 'rgba(249,115,22,0.22)')
+  } else {
+    ctx.fillStyle = isDark
+      ? (isSelected ? 'rgba(56,189,248,0.35)' : 'rgba(14,165,233,0.22)')
+      : (isSelected ? 'rgba(14,165,233,0.30)' : 'rgba(14,165,233,0.15)')
+  }
   ctx.fill()
 
-  // Border
-  ctx.strokeStyle = isSelected ? '#7dd3fc' : (isDark ? '#38bdf8' : '#0284c7')
+  ctx.strokeStyle = isOutput
+    ? (isSelected ? '#fb923c' : '#f97316')
+    : (isSelected ? '#7dd3fc' : (isDark ? '#38bdf8' : '#0284c7'))
   ctx.lineWidth = (isSelected ? 2 : 1.5) / sc
   ctx.stroke()
 
-  // Specular stripe
+  ctx.shadowBlur = 0
   ctx.fillStyle = 'rgba(255,255,255,0.18)'
   ctx.fillRect(-hw * 0.6, -hh * 0.7, hw * 1.2, hh * 0.4)
 
-  ctx.shadowBlur = 0
   ctx.restore()
+
+  if (isOutput) {
+    ctx.save()
+    const fontSize = Math.max(9, 11 / sc)
+    ctx.font = `bold ${fontSize}px system-ui`
+    ctx.fillStyle = '#fb923c'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.shadowColor = 'rgba(249,115,22,0.7)'
+    ctx.shadowBlur  = 6 / sc
+    ctx.fillText('E', j.x, j.y - hh - 3 / sc)
+    ctx.restore()
+  }
 }
 
 function drawJointNode(ctx, j, t, isDark, isSelected, isHovered) {
@@ -176,47 +265,37 @@ function drawJointNode(ctx, j, t, isDark, isSelected, isHovered) {
   const r = 8 / sc
 
   let fill
-  if (j.fixed)                       fill = isDark ? 'rgb(224,123,58)' : 'rgb(184,78,12)'
-  else if (j.driven)                  fill = isDark ? 'rgb(109,191,126)' : 'rgb(46,125,50)'
-  else if (j._isOutput)              fill = isDark ? 'rgb(251,146,60)' : 'rgb(234,88,12)'
-  else                               fill = isDark ? 'rgb(106,158,214)' : 'rgb(24,95,165)'
+  if (j.fixed)         fill = isDark ? 'rgb(224,123,58)'  : 'rgb(184,78,12)'
+  else if (j.driven)   fill = isDark ? 'rgb(109,191,126)' : 'rgb(46,125,50)'
+  else if (j._isOutput) fill = isDark ? 'rgb(251,146,60)' : 'rgb(234,88,12)'
+  else                 fill = isDark ? 'rgb(106,158,214)' : 'rgb(24,95,165)'
 
   ctx.save()
-  // Halo
   ctx.beginPath(); ctx.arc(j.x, j.y, r * 3, 0, Math.PI * 2)
   const grd = ctx.createRadialGradient(j.x, j.y, 0, j.x, j.y, r * 3)
   grd.addColorStop(0, fill.replace('rgb(', 'rgba(').replace(')', ',0.35)'))
   grd.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = grd; ctx.fill()
-  // Body
   ctx.beginPath(); ctx.arc(j.x, j.y, r, 0, Math.PI * 2)
   ctx.fillStyle = fill; ctx.fill()
-  // Specular
   ctx.beginPath(); ctx.arc(j.x - r * 0.3, j.y - r * 0.3, r * 0.35, 0, Math.PI * 2)
   ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fill()
-  // Selection / hover ring
   if (isSelected || isHovered) {
     ctx.beginPath(); ctx.arc(j.x, j.y, r + 5 / sc, 0, Math.PI * 2)
     ctx.strokeStyle = isSelected ? '#3c8ce7' : 'rgba(100,140,255,0.45)'
     ctx.lineWidth = 1.5 / sc; ctx.stroke()
   }
-  // Ground hatch
   if (j.fixed) {
     const gs = 10 / sc
     ctx.beginPath()
     ctx.moveTo(j.x - gs, j.y + r); ctx.lineTo(j.x + gs, j.y + r)
     for (let hx = -8; hx <= 8; hx += 4) {
-      ctx.moveTo(j.x + hx / sc, j.y + r)
+      ctx.moveTo(j.x + hx / sc,       j.y + r)
       ctx.lineTo(j.x + (hx - 4) / sc, j.y + r + 5 / sc)
     }
     ctx.strokeStyle = isDark ? 'rgba(220,140,80,0.8)' : 'rgba(120,60,10,0.8)'
     ctx.lineWidth = 1 / sc; ctx.stroke()
   }
-  // Driven orbit
-  if (j.driven && j.pivotId) {
-    // Orbit ring handled via pivot lookup — skip here for brevity
-  }
-  // Label
   const label = j.fixed ? 'F' : j.driven ? 'D' : (j._isOutput ? 'E' : '')
   if (label) {
     ctx.fillStyle = '#fff'; ctx.font = `bold ${9 / sc}px system-ui`
@@ -226,22 +305,54 @@ function drawJointNode(ctx, j, t, isDark, isSelected, isHovered) {
   ctx.restore()
 }
 
+// Fix 3: 渲染带时间透明度的轨迹
+function renderTrailsWithFade(ctx, trailRef, now) {
+  const TRAIL_LIFETIME = 3000
+  const trailData = trailRef.current || {}
+  Object.values(trailData).forEach(trail => {
+    if (!trail || trail.length < 2) return
+
+    // 过滤掉超过3秒的点
+    const alive = trail.filter(p => (now - p.t) < TRAIL_LIFETIME)
+    if (alive.length < 2) return
+
+    for (let k = 1; k < alive.length; k++) {
+      const p0 = alive[k - 1]
+      const p1 = alive[k]
+      if (!isFinite(p0.x) || !isFinite(p1.x)) continue
+
+      const age = now - p1.t
+      const alpha = Math.max(0, 1 - age / TRAIL_LIFETIME) * 0.55
+
+      ctx.beginPath()
+      ctx.moveTo(p0.x, p0.y)
+      ctx.lineTo(p1.x, p1.y)
+      ctx.strokeStyle = `rgba(100,160,255,${alpha})`
+      ctx.lineWidth = 1.5
+      ctx.lineJoin = 'round'
+      ctx.stroke()
+    }
+
+    // 就地更新，移除过期点
+    trailRef.current[Object.keys(trailData).find(k => trailData[k] === trail)] =
+      alive
+  })
+}
+
 function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds, selLIds, deadPoint) {
   if (!canvas) return
   const ctx = canvas.getContext('2d')
   const W = canvas.width, H = canvas.height
   ctx.clearRect(0, 0, W, H)
 
-  // Background
   ctx.fillStyle = isDark ? '#0a0d18' : '#f8faff'
   ctx.fillRect(0, 0, W, H)
 
-  // Dead-point border flash
   if (deadPoint) {
     ctx.save()
-    ctx.strokeStyle = 'rgba(239,68,68,0.6)'
-    ctx.lineWidth = 6
-    ctx.strokeRect(3, 3, W - 6, H - 6)
+    ctx.strokeStyle = 'rgba(239,68,68,0.5)'
+    ctx.lineWidth = 4
+    ctx.strokeRect(2, 2, W - 4, H - 4)
     ctx.restore()
   }
 
@@ -260,23 +371,13 @@ function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds
   for (let gx = gx0; gx < gx1; gx += step) { ctx.beginPath(); ctx.moveTo(gx, gy0); ctx.lineTo(gx, gy1); ctx.stroke() }
   for (let gy = gy0; gy < gy1; gy += step) { ctx.beginPath(); ctx.moveTo(gx0, gy); ctx.lineTo(gx1, gy); ctx.stroke() }
 
-  // Trails
-  const trailData = trailRef.current || {}
-  Object.values(trailData).forEach(trail => {
-    if (!trail || trail.length < 2) return
-    ctx.beginPath()
-    ctx.moveTo(trail[0].x, trail[0].y)
-    for (let k = 1; k < trail.length; k++) {
-      if (isFinite(trail[k].x) && isFinite(trail[k].y)) ctx.lineTo(trail[k].x, trail[k].y)
-    }
-    ctx.strokeStyle = isDark ? 'rgba(100,160,255,0.22)' : 'rgba(20,70,180,0.18)'
-    ctx.lineWidth = 1.5 / t.scale; ctx.lineJoin = 'round'; ctx.stroke()
-  })
+  // Fix 3: 时间渐淡轨迹（在 scale 变换内绘制）
+  renderTrailsWithFade(ctx, trailRef, Date.now())
 
-  // Slider rails (draw first, behind everything)
   const jMap = {}
   joints.forEach(j => { if (j && j.id) jMap[j.id] = j })
 
+  // Slider rails
   joints.forEach(j => {
     if (j && j.constraintType === 'SLIDER') drawSliderRail(ctx, j, t, isDark)
   })
@@ -289,7 +390,6 @@ function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds
     if (!ja || !jb) return
     const isSel = selLIds.has(lk.id)
     drawNeonLine(ctx, ja, jb, isSel ? 'rgb(60,140,231)' : clrLink, isSel ? 3.5 : 2.2, t.scale)
-    // Length label
     if (isFinite(ja.x) && isFinite(jb.x)) {
       const mx = (ja.x + jb.x) / 2, my = (ja.y + jb.y) / 2
       ctx.font = (10 / t.scale) + 'px system-ui'
@@ -309,27 +409,7 @@ function renderCanvas(canvas, joints, links, trailRef, t, isDark, hovId, selJIds
     }
   })
 
-  // Dead-point text overlay
-  if (deadPoint) {
-    ctx.save()
-    ctx.font = `bold ${14 / t.scale}px system-ui`
-    ctx.fillStyle = 'rgba(239,68,68,0.9)'
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-    // Draw in screen space
-    ctx.restore()
-  }
-
   ctx.restore()
-
-  // Dead-point overlay in screen space
-  if (deadPoint) {
-    ctx.save()
-    ctx.font = 'bold 13px system-ui'
-    ctx.fillStyle = 'rgba(239,68,68,0.85)'
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-    ctx.fillText('⚠ Invalid Geometry — Dead Point', W / 2, 14)
-    ctx.restore()
-  }
 }
 
 // ─── 主组件 ──────────────────────────────────────────────────────
@@ -343,24 +423,30 @@ export default function Sandbox() {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE)
 
   // Mutable refs
-  const playingRef    = useRef(false)
-  const thetaRef      = useRef(0)
-  const speedRef      = useRef(1.0)
-  const trailRef      = useRef({})
-  const jointsRef     = useRef([])
-  const linksRef      = useRef([])
-  const transformRef  = useRef({ x: 0, y: 0, scale: 1 })
-  const selectedRef   = useRef([])
-  const toolRef       = useRef('select')
-  const draggingRef   = useRef(null)
-  const panningRef    = useRef(false)
-  const panStartRef   = useRef(null)
-  const hoveredRef    = useRef(null)
-  const rafRef        = useRef(null)
-  const isDarkRef     = useRef(isDark)
-  const deadPointRef  = useRef(false)
-  // For branch-continuity: store previous solve positions
-  const prevPosRef    = useRef({})  // { id -> {x, y} }
+  const playingRef   = useRef(false)
+  const thetaRef     = useRef(0)
+  const speedRef     = useRef(1.0)
+  const trailRef     = useRef({})
+  const jointsRef    = useRef([])
+  const linksRef     = useRef([])
+  const transformRef = useRef({ x: 0, y: 0, scale: 1 })
+  const selectedRef  = useRef([])
+  const toolRef      = useRef('select')
+  const draggingRef  = useRef(null)
+  const panningRef   = useRef(false)
+  const panStartRef  = useRef(null)
+  const hoveredRef   = useRef(null)
+  const rafRef       = useRef(null)
+  const isDarkRef    = useRef(isDark)
+  const deadPointRef = useRef(false)
+  const prevPosRef   = useRef({})
+
+  // Fix 1: Chart dimension toggle state
+  const [chartDimension, setChartDimension] = useState('x')
+
+  // Fix 3: Live chart data stores both x and y
+  const [liveChartData, setLiveChartData] = useState([])
+  const [showInvalidOverlay, setShowInvalidOverlay] = useState(false)
 
   // Sync refs
   useEffect(() => { playingRef.current = state.playing }, [state.playing])
@@ -371,6 +457,20 @@ export default function Sandbox() {
   useEffect(() => { selectedRef.current = state.selected }, [state.selected])
   useEffect(() => { toolRef.current = state.tool }, [state.tool])
   useEffect(() => { isDarkRef.current = isDark }, [isDark])
+
+  // Fix 4: Track joint/link count for trail reset
+  const prevJointCountRef = useRef(0)
+  const prevLinkCountRef  = useRef(0)
+  useEffect(() => {
+    const jLen = state.joints.length
+    const lLen = state.links.length
+    if (jLen !== prevJointCountRef.current || lLen !== prevLinkCountRef.current) {
+      trailRef.current = {}
+      setLiveChartData([])
+      prevJointCountRef.current = jLen
+      prevLinkCountRef.current  = lLen
+    }
+  }, [state.joints.length, state.links.length])
 
   // ── Coordinate helpers ────────────────────────────────────────
 
@@ -395,7 +495,6 @@ export default function Sandbox() {
     for (let i = joints.length - 1; i >= 0; i--) {
       const j = joints[i]
       if (!j || !isFinite(j.x) || !isFinite(j.y)) continue
-      // For sliders, use rectangular hit-test
       if (j.constraintType === 'SLIDER') {
         const hw = Math.max(20, 20 / transformRef.current.scale)
         const hh = Math.max(12, 12 / transformRef.current.scale)
@@ -437,59 +536,79 @@ export default function Sandbox() {
       const joints = jointsRef.current
       const links  = linksRef.current
       const t      = transformRef.current
+      const now    = Date.now()
 
       if (playingRef.current) {
         thetaRef.current = (thetaRef.current + speedRef.current * 0.022) % (2 * Math.PI)
 
-        // Drive the driven joint
         const driven = joints.find(j => j && j.driven)
-        if (driven) {
-          if (driven.constraintType !== 'SLIDER' && driven.pivotId) {
-            const pivot = joints.find(j => j && j.id === driven.pivotId)
-            if (pivot && isFinite(pivot.x) && safeNum(driven.radius) > 0) {
-              driven.x = pivot.x + driven.radius * Math.cos(thetaRef.current)
-              driven.y = pivot.y + driven.radius * Math.sin(thetaRef.current)
-            }
+        if (driven && driven.constraintType !== 'SLIDER' && driven.pivotId) {
+          const pivot = joints.find(j => j && j.id === driven.pivotId)
+          if (pivot && isFinite(pivot.x) && safeNum(driven.radius) > 0) {
+            driven.x = pivot.x + driven.radius * Math.cos(thetaRef.current)
+            driven.y = pivot.y + driven.radius * Math.sin(thetaRef.current)
           }
         }
 
-        // Apply previous-frame warm-start to free joints
-        const prev = prevPosRef.current
-        joints.forEach(j => {
-          if (!j || j.fixed || j.driven) return
-          if (prev[j.id]) {
-            // Use previous position as starting point (already there from last frame)
-            // No-op: positions ARE the previous frame unless we reset them
-          }
-        })
-
-        // Solve
+        // Fix 4: 增大容差 + 仅在 maxError > 5 时判为死点（非阻塞）
         const idxMap = buildIdxMap(joints)
-        const { converged } = solverSolve(joints, links, idxMap, 100, 0.08)
+        let converged = false, maxError = 0
+        try {
+          const result = solverSolve(joints, links, idxMap, 120, 0.15)
+          converged = result.converged
+          maxError = result.maxError
+        } catch {
+          // Fix 4: 求解器异常时静默跳帧，不锁死
+          rafRef.current = requestAnimationFrame(animate)
+          return
+        }
 
-        // Detect dead point
-        const isDeadPoint = !converged
+        const isDeadPoint = !converged && maxError > 5.0
+
         if (deadPointRef.current !== isDeadPoint) {
           deadPointRef.current = isDeadPoint
           dispatch({ type: 'SET_DEAD_POINT', payload: isDeadPoint })
+          setShowInvalidOverlay(isDeadPoint)
+
+          if (isDeadPoint) {
+            playingRef.current = false
+            dispatch({ type: 'SET_PLAYING', payload: false })
+          }
         }
 
-        // Save positions for next frame warm-start
         joints.forEach(j => {
           if (j && isFinite(j.x) && isFinite(j.y)) {
-            prev[j.id] = { x: j.x, y: j.y }
+            prevPosRef.current[j.id] = { x: j.x, y: j.y }
           }
         })
 
-        // Update trail for output joint
+        // Fix 3: 轨迹点存储时间戳
         const tr = trailRef.current
         joints.forEach(j => {
           if (!j || !j._isOutput) return
           if (!isFinite(j.x) || !isFinite(j.y) || isDeadPoint) return
           if (!tr[j.id]) tr[j.id] = []
-          tr[j.id].push({ x: j.x, y: j.y })
-          if (tr[j.id].length > 400) tr[j.id].shift()
+          tr[j.id].push({ x: j.x, y: j.y, t: now })
+          // 限制数组长度，防止无限增长（3s * 60fps ≈ 180 点，给 500 的余量）
+          if (tr[j.id].length > 500) tr[j.id].shift()
         })
+
+        // Fix 1: 实时图表存储 x 和 y
+        const outputJoint = joints.find(j => j && j._isOutput)
+        if (outputJoint && !isDeadPoint) {
+          const angleDeg = Math.round((thetaRef.current * 180) / Math.PI) % 360
+          setLiveChartData(prev => {
+            const newPoint = {
+              angle: angleDeg,
+              x: isFinite(outputJoint.x) ? parseFloat(outputJoint.x.toFixed(3)) : null,
+              y: isFinite(outputJoint.y) ? parseFloat(outputJoint.y.toFixed(3)) : null,
+            }
+            const next = [...prev.filter(p => p.angle !== angleDeg), newPoint]
+              .sort((a, b) => a.angle - b.angle)
+            // return next.length > 180 ? next.slice(-180) : next
+            return next
+          })
+        }
 
         dispatch({ type: 'SET_THETA', payload: thetaRef.current })
       }
@@ -535,46 +654,61 @@ export default function Sandbox() {
   // ── Presets ───────────────────────────────────────────────────
 
   const loadPreset = useCallback((name) => {
-    _idSeq = 1; trailRef.current = {}; thetaRef.current = 0
-    playingRef.current = false; prevPosRef.current = {}
+    _idSeq = 1
+    trailRef.current = {}
+    thetaRef.current = 0
+    playingRef.current = false
+    prevPosRef.current = {}
     deadPointRef.current = false
+    setShowInvalidOverlay(false)
+    setLiveChartData([])
+
     let joints = [], links = []
 
     if (name === 'fourbar') {
-      const O = { id: newId(), x: -120, y: 0,  fixed: true }
-      const D = { id: newId(), x: 120,  y: 0,  fixed: true }
-      const A = { id: newId(), x: -80,  y: 80, driven: true, pivotId: O.id, radius: dist2D({ x: -80, y: 80 }, O) }
-      const B = { id: newId(), x: 80,   y: 70, _isOutput: true }
+      // Grashof: s+l <= p+q  =>  50+200 <= 160+110  =>  250 <= 270 ✓
+      // O and D are ground pivots, 200 apart
+      const O = { id: newId(), x: -100, y: 0, fixed: true }
+      const D = { id: newId(), x:  100, y: 0, fixed: true }
+      // A is crank end: radius=50 from O, initial theta=90deg
+      const A = { id: newId(), x: -100, y: 50, driven: true, pivotId: null, radius: 50 }
+      // B is coupler-rocker joint, positioned so coupler=160, rocker=110
+      const B = { id: newId(), x: 60, y: 90, _isOutput: true }
+      A.pivotId = O.id
       joints = [O, D, A, B]
       links = [
-        { id: newId(), aId: O.id, bId: A.id, length: dist2D(O, A) },
-        { id: newId(), aId: A.id, bId: B.id, length: dist2D(A, B) },
-        { id: newId(), aId: D.id, bId: B.id, length: dist2D(D, B) },
+        { id: newId(), aId: O.id, bId: A.id, length: 50 },
+        { id: newId(), aId: A.id, bId: B.id, length: 160 },
+        { id: newId(), aId: D.id, bId: B.id, length: 110 },
       ]
     } else if (name === 'slider') {
-      const O  = { id: newId(), x: -100, y: 0, fixed: true }
-      const A  = { id: newId(), x: -60, y: 70, driven: true, pivotId: O.id, radius: dist2D({ x: -60, y: 70 }, O) }
-      // Slider joint at y=0
-      const S  = {
-        id: newId(), x: 80, y: 0,
+      // Fix 2: 曲柄滑块，3 个节点，2 根杆
+      // O: 固定机架  A: 曲柄端（绕 O 转，半径 80）  S: 水平导轨滑块
+      // 连杆长度 200 >> 曲柄半径 80，保证全周无死点
+      const O = { id: newId(), x: -100, y: 0, fixed: true }
+      const A = {
+        id: newId(), x: -100 + 80, y: 0,   // 初始 theta=0
+        driven: true, pivotId: null,        // pivotId 在下面设置
+        radius: 80,
+      }
+      A.pivotId = O.id
+      const S = {
+        id: newId(), x: 180, y: 0,
         constraintType: 'SLIDER',
         _axisOrigin: { x: 0, y: 0 },
-        _axisDir:   { x: 1, y: 0 },
+        _axisDir:    { x: 1, y: 0 },
         _isOutput: true,
       }
       joints = [O, A, S]
       links = [
-        { id: newId(), aId: O.id, bId: A.id, length: dist2D(O, A) },
+        { id: newId(), aId: O.id, bId: A.id, length: 80 },
         { id: newId(), aId: A.id, bId: S.id, length: dist2D(A, S) },
       ]
-    } else if (name === 'crank') {
-      const O = { id: newId(), x: 0, y: 0, fixed: true }
-      const A = { id: newId(), x: 80, y: 0, driven: true, pivotId: O.id, radius: 80, _isOutput: true }
-      joints = [O, A]
-      links = [{ id: newId(), aId: O.id, bId: A.id, length: 80 }]
     }
+    // Fix 2: 移除 'crank' 预设（简单曲柄已删除）
 
-    jointsRef.current = joints; linksRef.current = links
+    jointsRef.current = joints
+    linksRef.current  = links
     dispatch({ type: 'LOAD_PRESET', joints, links })
     dispatch({ type: 'SET_PLAYING', payload: false })
     dispatch({ type: 'SET_DEAD_POINT', payload: false })
@@ -610,7 +744,8 @@ export default function Sandbox() {
         selectedRef.current = next
         dispatch({ type: 'SET_SELECTED', payload: next })
       } else {
-        selectedRef.current = []; dispatch({ type: 'SET_SELECTED', payload: [] })
+        selectedRef.current = []
+        dispatch({ type: 'SET_SELECTED', payload: [] })
       }
     } else if (toolRef.current === 'joint') {
       const w = screenToWorld(sx, sy)
@@ -619,15 +754,14 @@ export default function Sandbox() {
       jointsRef.current = [...jointsRef.current, nj]
       dispatch({ type: 'ADD_JOINT', payload: nj })
     } else if (toolRef.current === 'slider') {
-      // Place a horizontal slider joint
       const w = screenToWorld(sx, sy)
       jointsRef.current.forEach(j => { j._isOutput = false })
       const ns = {
         id: newId(),
         x: w.x, y: w.y,
         constraintType: 'SLIDER',
-        _axisOrigin: { x: w.x, y: w.y },  // axis passes through placement point
-        _axisDir:   { x: 1, y: 0 },         // horizontal by default
+        _axisOrigin: { x: w.x, y: w.y },
+        _axisDir:    { x: 1, y: 0 },
         _isOutput: true,
       }
       jointsRef.current = [...jointsRef.current, ns]
@@ -638,8 +772,10 @@ export default function Sandbox() {
   const handleMouseMove = useCallback((e) => {
     const { sx, sy } = getCanvasXY(e)
     if (panningRef.current && panStartRef.current) {
-      const newT = { ...transformRef.current, x: sx - panStartRef.current.x, y: sy - panStartRef.current.y }
-      transformRef.current = newT; dispatch({ type: 'SET_TRANSFORM', payload: newT }); return
+      const newT = { ...transformRef.current, x: sx - panStartRef.current.x, y: sy - transformRef.current.y }
+      transformRef.current = newT
+      dispatch({ type: 'SET_TRANSFORM', payload: newT })
+      return
     }
     if (draggingRef.current && !playingRef.current) {
       const w = screenToWorld(sx, sy)
@@ -649,17 +785,15 @@ export default function Sandbox() {
       if (jIdx >= 0) {
         const j = joints[jIdx]
         let nx = w.x, ny = w.y
-        // Constrain slider drag to its axis
-        if (j.constraintType === 'SLIDER' && j._axisDir) {
-          const ao = j._axisOrigin ?? { x: j.x, y: j.y }
-          const ad = j._axisDir
-          const dx = w.x - ao.x, dy = w.y - ao.y
-          const tParam = dx * ad.x + dy * ad.y
-          nx = ao.x + tParam * ad.x
-          ny = ao.y + tParam * ad.y
+        
+        if (j.constraintType === 'SLIDER') {
+          // Allow free 2D translation of the entire slider track in edit mode
+          nx = w.x
+          ny = w.y
+          joints[jIdx] = { ...j, x: nx, y: ny, _axisOrigin: { x: nx, y: ny } }
+        } else {
+          joints[jIdx] = { ...j, x: nx, y: ny }
         }
-        joints[jIdx] = { ...j, x: nx, y: ny }
-        // Update link lengths
         linksRef.current = linksRef.current.map(lk => {
           if (!lk) return lk
           if (lk.aId !== draggingRef.current.id && lk.bId !== draggingRef.current.id) return lk
@@ -684,7 +818,7 @@ export default function Sandbox() {
     }
     if (draggingRef.current) {
       dispatch({ type: 'SYNC_JOINTS', payload: [...jointsRef.current] })
-      dispatch({ type: 'SYNC_LINKS', payload: [...linksRef.current] })
+      dispatch({ type: 'SYNC_LINKS',  payload: [...linksRef.current] })
       draggingRef.current = null
     }
   }, [])
@@ -700,7 +834,8 @@ export default function Sandbox() {
       x: sx - (sx - transformRef.current.x) * (newScale / oldScale),
       y: sy - (sy - transformRef.current.y) * (newScale / oldScale),
     }
-    transformRef.current = newT; dispatch({ type: 'SET_TRANSFORM', payload: newT })
+    transformRef.current = newT
+    dispatch({ type: 'SET_TRANSFORM', payload: newT })
   }, [getCanvasXY])
 
   const handleContextMenu = useCallback((e) => { e.preventDefault() }, [])
@@ -733,7 +868,8 @@ export default function Sandbox() {
               }
             }
           }
-          selectedRef.current = []; dispatch({ type: 'SET_SELECTED', payload: [] })
+          selectedRef.current = []
+          dispatch({ type: 'SET_SELECTED', payload: [] })
         }
       }
 
@@ -769,6 +905,11 @@ export default function Sandbox() {
         e.preventDefault()
         const next = !playingRef.current
         playingRef.current = next
+        if (next) {
+          setShowInvalidOverlay(false)
+          deadPointRef.current = false
+          dispatch({ type: 'SET_DEAD_POINT', payload: false })
+        }
         dispatch({ type: 'SET_PLAYING', payload: next })
       }
     }
@@ -780,11 +921,11 @@ export default function Sandbox() {
 
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return
-    canvas.addEventListener('mousedown',    handleMouseDown)
-    canvas.addEventListener('mousemove',    handleMouseMove)
-    canvas.addEventListener('mouseup',      handleMouseUp)
-    canvas.addEventListener('wheel',        handleWheel, { passive: false })
-    canvas.addEventListener('contextmenu',  handleContextMenu)
+    canvas.addEventListener('mousedown',   handleMouseDown)
+    canvas.addEventListener('mousemove',   handleMouseMove)
+    canvas.addEventListener('mouseup',     handleMouseUp)
+    canvas.addEventListener('wheel',       handleWheel, { passive: false })
+    canvas.addEventListener('contextmenu', handleContextMenu)
     return () => {
       canvas.removeEventListener('mousedown',   handleMouseDown)
       canvas.removeEventListener('mousemove',   handleMouseMove)
@@ -794,7 +935,6 @@ export default function Sandbox() {
     }
   }, [handleMouseDown, handleMouseMove, handleMouseUp, handleWheel, handleContextMenu])
 
-  // Load default preset
   useEffect(() => { loadPreset('fourbar') }, [loadPreset])
 
   // ── Fullscreen ────────────────────────────────────────────────
@@ -820,29 +960,51 @@ export default function Sandbox() {
     })
   }, [])
 
-  // ── Displacement curve ────────────────────────────────────────
-
+  // Fix 1: Full 0-360° static curve for lock mode
   const outputJoint = state.joints.find(j => j._isOutput)
   const drivenJoint = state.joints.find(j => j.driven)
 
-  const curvData = useMemo(() => {
-    if (!drivenJoint || !outputJoint) return []
-    try {
-      return computeDisplacementCurve(
-        jointsRef.current.map(j => ({ ...j })),
-        linksRef.current.map(l => ({ ...l })),
-        drivenJoint.id,
-        outputJoint.id
-      )
-    } catch { return [] }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.joints.length, state.links.length, state.playing, locked])
+// Stable snapshot for locked curve — recompute when locked, dimension changes,
+// or any joint position / link length changes
+const jointSnapshot = JSON.stringify(
+  state.joints.map(j => ({ id: j?.id, x: j?.x, y: j?.y, fixed: j?.fixed, driven: j?.driven, radius: j?.radius }))
+)
+const linkSnapshot = JSON.stringify(
+  state.links.map(l => ({ id: l?.id, aId: l?.aId, bId: l?.bId, length: l?.length }))
+)
+
+const staticCurveData = useMemo(() => {
+  if (!drivenJoint || !outputJoint) return []
+  try {
+    return computeDisplacementCurveSafe(
+      jointsRef.current.map(j => ({ ...j })),
+      linksRef.current.map(l => ({ ...l })),
+      drivenJoint.id,
+      outputJoint.id
+    )
+  } catch { return [] }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [chartDimension, jointSnapshot, linkSnapshot])
+
+  // It will only use the slow, dot-by-dot live tracking if you press Play.
+  const chartData = staticCurveData
+  const chartKey = chartDimension  // y-axis key to plot
 
   const currentAngleDeg = Math.round((thetaRef.current * 180) / Math.PI) % 360
 
   // ── DOF ───────────────────────────────────────────────────────
 
-  const dof = solverDOF(state.joints, state.links)
+  // ── DOF ───────────────────────────────────────────────────────
+
+  // Fix: Accurate Point-Mass DOF Calculation
+  const movingJoints = state.joints.filter(j => j && !j.fixed)
+  const totalFreeDOF = movingJoints.length * 2 // Each free point has X and Y freedom
+  
+  const linkConstraints = state.links.filter(l => l).length // Each link locks 1 distance
+  const sliderConstraints = movingJoints.filter(j => j.constraintType === 'SLIDER').length // Each slider locks 1 axis
+  
+  const dof = totalFreeDOF - linkConstraints - sliderConstraints
+
   let dofLabel = '—', dofColor = '#94a3b8'
   if (dof !== null) {
     if      (dof <= 0)  { dofLabel = `F=${dof} 过约束`; dofColor = '#f87171' }
@@ -873,16 +1035,17 @@ export default function Sandbox() {
 
   const clrCrank  = isDark ? '#a78bfa' : '#7c3aed'
   const clrOutput = isDark ? '#fb923c' : '#ea580c'
+  const clrOutputY = isDark ? '#34d399' : '#059669'
   const textPri   = isDark ? '#e2e8f0' : '#1e293b'
   const textSec   = isDark ? 'rgba(226,232,240,0.6)' : 'rgba(30,41,59,0.6)'
   const panelBg   = isDark ? 'rgba(15,20,35,0.85)' : 'rgba(255,255,255,0.85)'
   const panelBdr  = isDark ? 'rgba(167,139,250,0.22)' : 'rgba(124,58,237,0.15)'
   const glass = {
-    background: panelBg,
-    border: `0.5px solid ${panelBdr}`,
-    borderRadius: 14,
-    padding: '14px 16px',
-    backdropFilter: 'blur(18px)',
+    background:           panelBg,
+    border:               `0.5px solid ${panelBdr}`,
+    borderRadius:         14,
+    padding:              '14px 16px',
+    backdropFilter:       'blur(18px)',
     WebkitBackdropFilter: 'blur(18px)',
   }
 
@@ -890,7 +1053,23 @@ export default function Sandbox() {
     padding: '5px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 500,
     background: state.tool === id ? 'rgba(167,139,250,0.18)' : 'transparent',
     color:      state.tool === id ? '#a78bfa' : textSec,
-    border: state.tool === id ? '0.5px solid rgba(167,139,250,0.45)' : '0.5px solid transparent',
+    border:     state.tool === id
+      ? '0.5px solid rgba(167,139,250,0.45)'
+      : '0.5px solid transparent',
+    transition: 'all 0.15s',
+  })
+
+  const dimBtnStyle = (dim) => ({
+    padding: '3px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+    background: chartDimension === dim
+      ? (dim === 'x' ? 'rgba(251,146,60,0.20)' : 'rgba(52,211,153,0.20)')
+      : 'transparent',
+    color: chartDimension === dim
+      ? (dim === 'x' ? clrOutput : clrOutputY)
+      : textSec,
+    border: chartDimension === dim
+      ? `0.5px solid ${dim === 'x' ? 'rgba(251,146,60,0.5)' : 'rgba(52,211,153,0.5)'}`
+      : '0.5px solid transparent',
     transition: 'all 0.15s',
   })
 
@@ -919,16 +1098,22 @@ export default function Sandbox() {
         .sandbox-page textarea {
           font-family: inherit;
         }
+        @keyframes overlay-pulse {
+          0%,100% { opacity: 0.82; }
+          50%      { opacity: 0.95; }
+        }
       `}</style>
-      {/* Page header */}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px 12px' }}>
-        <div>
+        <div key={isDark ? 'title-dark' : 'title-light'}>
           <h1 style={{
             fontSize: 20, fontWeight: 600, margin: '0 0 4px',
             background: isDark
               ? 'linear-gradient(90deg,#a78bfa,#22d3ee)'
               : 'linear-gradient(90deg,#7c3aed,#0694a2)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block'
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor:  'transparent',
+            display: 'inline-block',
           }}>
             实战工坊 — 通用机构设计平台
           </h1>
@@ -940,9 +1125,9 @@ export default function Sandbox() {
           onClick={toggleFullscreen}
           style={{
             background: isDark ? 'rgba(167,139,250,0.12)' : 'rgba(124,58,237,0.08)',
-            border: `0.5px solid ${isDark ? 'rgba(167,139,250,0.35)' : 'rgba(124,58,237,0.3)'}`,
-            color: isDark ? '#a78bfa' : '#7c3aed',
-            borderRadius: 8, padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 500
+            border:     `0.5px solid ${isDark ? 'rgba(167,139,250,0.35)' : 'rgba(124,58,237,0.3)'}`,
+            color:      isDark ? '#a78bfa' : '#7c3aed',
+            borderRadius: 8, padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 500,
           }}
         >
           {isFullscreen ? '⊡ 退出全屏' : '⊞ 全屏'}
@@ -982,7 +1167,7 @@ export default function Sandbox() {
               <span style={{
                 padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                 color: '#f87171', border: '0.5px solid rgba(239,68,68,0.5)',
-                background: 'rgba(239,68,68,0.12)', animation: 'none',
+                background: 'rgba(239,68,68,0.12)',
               }}>⚠ 死点</span>
             )}
 
@@ -990,13 +1175,20 @@ export default function Sandbox() {
               onClick={() => {
                 const next = !state.playing
                 playingRef.current = next
+                if (next) {
+                  setShowInvalidOverlay(false)
+                  deadPointRef.current = false
+                  dispatch({ type: 'SET_DEAD_POINT', payload: false })
+                }
                 dispatch({ type: 'SET_PLAYING', payload: next })
               }}
               style={{
                 padding: '5px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
                 background: state.playing ? 'rgba(248,113,113,0.15)' : 'rgba(52,211,153,0.15)',
                 color:      state.playing ? '#f87171' : '#34d399',
-                border:     state.playing ? '0.5px solid rgba(248,113,113,0.4)' : '0.5px solid rgba(52,211,153,0.4)',
+                border:     state.playing
+                  ? '0.5px solid rgba(248,113,113,0.4)'
+                  : '0.5px solid rgba(52,211,153,0.4)',
               }}
             >
               {state.playing ? '⏸ 暂停' : '▶ 运行'}
@@ -1009,7 +1201,7 @@ export default function Sandbox() {
             </span>
           </div>
 
-          {/* Canvas */}
+          {/* Canvas container */}
           <div style={{
             ...glass, padding: 0, overflow: 'hidden', position: 'relative', height: 400,
             border: state.deadPoint
@@ -1021,35 +1213,95 @@ export default function Sandbox() {
               ref={canvasRef}
               style={{
                 display: 'block', width: '100%', height: '100%',
-                cursor: state.tool === 'joint' ? 'crosshair'
+                cursor: state.tool === 'joint'  ? 'crosshair'
                       : state.tool === 'slider' ? 'cell'
-                      : 'default'
+                      : 'default',
               }}
             />
 
+            {/* Invalid Geometry Overlay */}
+            {showInvalidOverlay && (
+              <div style={{
+                position:       'absolute',
+                inset:          0,
+                display:        'flex',
+                flexDirection:  'column',
+                alignItems:     'center',
+                justifyContent: 'center',
+                background:     'rgba(239,68,68,0.18)',
+                backdropFilter: 'blur(2px)',
+                animation:      'overlay-pulse 1.4s ease-in-out infinite',
+                pointerEvents:  'none',
+                zIndex:         10,
+              }}>
+                <div style={{
+                  padding:      '14px 28px',
+                  borderRadius: 12,
+                  background:   'rgba(15,5,5,0.72)',
+                  border:       '1.5px solid rgba(239,68,68,0.55)',
+                  textAlign:    'center',
+                  boxShadow:    '0 4px 24px rgba(239,68,68,0.3)',
+                }}>
+                  <div style={{ fontSize: 28, marginBottom: 6 }}>⚠️</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fca5a5', letterSpacing: '0.04em' }}>
+                    机构处于非法位置
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(252,165,165,0.75)', marginTop: 4 }}>
+                    Invalid Geometry — 动画已自动停止
+                  </div>
+                  <button
+                    style={{
+                      marginTop:    10,
+                      padding:      '5px 14px',
+                      borderRadius: 8,
+                      background:   'rgba(239,68,68,0.2)',
+                      border:       '0.5px solid rgba(239,68,68,0.5)',
+                      color:        '#fca5a5',
+                      cursor:       'pointer',
+                      fontSize:     11,
+                      fontWeight:   600,
+                      pointerEvents:'auto',
+                    }}
+                    onClick={() => {
+                      setShowInvalidOverlay(false)
+                      deadPointRef.current = false
+                      dispatch({ type: 'SET_DEAD_POINT', payload: false })
+                    }}
+                  >
+                    关闭提示
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Status badge */}
             <div style={{
-              position: 'absolute', top: 12, left: 12,
-              background: isDark ? 'rgba(10,13,24,0.78)' : 'rgba(255,255,255,0.82)',
-              border: `0.5px solid ${isDark ? 'rgba(167,139,250,0.3)' : 'rgba(124,58,237,0.2)'}`,
-              borderRadius: 8, padding: '6px 12px', fontSize: 12, color: textSec,
+              position:       'absolute', top: 12, left: 12,
+              background:     isDark ? 'rgba(10,13,24,0.78)' : 'rgba(255,255,255,0.82)',
+              border:         `0.5px solid ${isDark ? 'rgba(167,139,250,0.3)' : 'rgba(124,58,237,0.2)'}`,
+              borderRadius:   8, padding: '6px 12px', fontSize: 12, color: textSec,
               backdropFilter: 'blur(8px)', zIndex: 5,
-              display: 'flex', gap: 12, alignItems: 'center'
+              display: 'flex', gap: 12, alignItems: 'center',
             }}>
               <span>θ = <span style={{ color: clrCrank, fontWeight: 600, fontFamily: 'monospace' }}>{currentAngleDeg}°</span></span>
               {outputJoint && isFinite(outputJoint.x) && (
-                <span>E.x = <span style={{ color: clrOutput, fontWeight: 600, fontFamily: 'monospace' }}>{outputJoint.x.toFixed(2)}</span></span>
+                <span>
+                  E.x = <span style={{ color: clrOutput, fontWeight: 600, fontFamily: 'monospace' }}>{outputJoint.x.toFixed(2)}</span>
+                  <span style={{ marginLeft: 8 }}>
+                    E.y = <span style={{ color: clrOutputY, fontWeight: 600, fontFamily: 'monospace' }}>{outputJoint.y.toFixed(2)}</span>
+                  </span>
+                </span>
               )}
               {locked && <span style={{ color: '#fb923c', fontSize: 11 }}>🔒 锁定</span>}
             </div>
 
             {/* Legend */}
             <div style={{
-              position: 'absolute', bottom: 10, left: 12,
-              display: 'flex', gap: 10, flexWrap: 'wrap',
-              background: isDark ? 'rgba(10,13,24,0.72)' : 'rgba(255,255,255,0.78)',
-              border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
-              borderRadius: 8, padding: '5px 10px', fontSize: 11,
+              position:       'absolute', bottom: 10, left: 12,
+              display:        'flex', gap: 10, flexWrap: 'wrap',
+              background:     isDark ? 'rgba(10,13,24,0.72)' : 'rgba(255,255,255,0.78)',
+              border:         `0.5px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
+              borderRadius:   8, padding: '5px 10px', fontSize: 11,
               backdropFilter: 'blur(8px)',
             }}>
               {[
@@ -1067,22 +1319,37 @@ export default function Sandbox() {
             </div>
           </div>
 
-          {/* Displacement chart */}
+          {/* Fix 1: Displacement chart with dimension toggle and fixed 0-360° x-axis */}
           <div style={{ ...glass }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: textSec, marginBottom: 6 }}>
-              输出节点 E 的水平位移 x(θ) 曲线
-              {curvData.length === 0 && (
-                <span style={{ marginLeft: 8, color: '#fbbf24', fontSize: 11 }}>（设置驱动节点 D 和输出节点 E 后显示）</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: textSec }}>
+                输出节点 E 位移曲线
+              </span>
+              {/* Dimension toggle */}
+              <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
+                <button style={dimBtnStyle('x')} onClick={() => setChartDimension('x')}>
+                  水平 x(θ)
+                </button>
+                <button style={dimBtnStyle('y')} onClick={() => setChartDimension('y')}>
+                  铅垂 y(θ)
+                </button>
+              </div>
+              {state.playing && !locked && (
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                  background: 'rgba(52,211,153,0.15)', border: '0.5px solid rgba(52,211,153,0.4)',
+                  color: '#34d399', fontWeight: 600, marginLeft: 'auto',
+                }}>● 实时</span>
               )}
-              {locked && curvData.length > 0 && (
-                <span style={{ marginLeft: 10, color: '#fb923c', fontSize: 11 }}>· 点击图表跳转角度</span>
+              {chartData.length === 0 && (
+                <span style={{ color: '#fbbf24', fontSize: 11, marginLeft: 'auto' }}>（运行后显示）</span>
               )}
             </div>
             <div style={{ minHeight: 190 }}>
-              {curvData.length > 0 ? (
+              {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={180}>
                   <LineChart
-                    data={curvData}
+                    data={chartData}
                     margin={{ top: 4, right: 20, bottom: 4, left: -10 }}
                     onClick={locked ? (data) => {
                       if (data?.activeLabel != null) thetaRef.current = (data.activeLabel * Math.PI) / 180
@@ -1090,20 +1357,56 @@ export default function Sandbox() {
                     style={{ cursor: locked ? 'crosshair' : 'default' }}
                   >
                     <CartesianGrid strokeDasharray="4 4" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)'} />
-                    <XAxis dataKey="angle" tick={{ fontSize: 10, fill: textSec }} tickLine={false} axisLine={false} tickFormatter={v => `${v}°`} />
-                    <YAxis tick={{ fontSize: 10, fill: textSec }} tickLine={false} axisLine={false} tickFormatter={v => v.toFixed(1)} />
+                    {/* Fix 1: 横轴固定 0-360° */}
+                    <XAxis
+                      dataKey="angle"
+                      type="number"
+                      domain={[0, 360]}
+                      ticks={[0, 60, 120, 180, 240, 300, 360]}
+                      tick={{ fontSize: 10, fill: textSec }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => `${v}°`}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: textSec }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => v.toFixed(1)}
+                    />
                     <Tooltip
-                      contentStyle={{ background: isDark ? 'rgba(15,20,35,0.94)' : 'rgba(255,255,255,0.94)', border: `0.5px solid ${isDark ? 'rgba(251,146,60,0.4)' : 'rgba(234,88,12,0.3)'}`, borderRadius: 8, fontSize: 11, color: textPri }}
-                      formatter={v => v !== null ? [v.toFixed(3), 'E.x'] : ['— 死点', 'E.x']}
+                      contentStyle={{
+                        background: isDark ? 'rgba(15,20,35,0.94)' : 'rgba(255,255,255,0.94)',
+                        border: `0.5px solid ${chartDimension === 'x' ? 'rgba(251,146,60,0.4)' : 'rgba(52,211,153,0.4)'}`,
+                        borderRadius: 8, fontSize: 11, color: textPri
+                      }}
+                      formatter={v => v !== null ? [v.toFixed(3), `E.${chartDimension}`] : ['— 死点', `E.${chartDimension}`]}
                       labelFormatter={l => `θ = ${l}°`}
                     />
-                    <ReferenceLine x={currentAngleDeg - (currentAngleDeg % 2)} stroke={clrCrank} strokeDasharray="4 3" strokeWidth={1.5} opacity={0.7} />
-                    <Line type="monotone" dataKey="displacement" stroke={clrOutput} strokeWidth={2} dot={false} connectNulls={false} activeDot={{ r: 4, fill: clrOutput }} />
+                    <ReferenceLine
+                      x={currentAngleDeg}
+                      stroke={clrCrank}
+                      strokeDasharray="4 3"
+                      strokeWidth={1.5}
+                      opacity={0.7}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey={chartKey}
+                      stroke={chartDimension === 'x' ? clrOutput : clrOutputY}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls={false}
+                      activeDot={{ r: 4, fill: chartDimension === 'x' ? clrOutput : clrOutputY }}
+                      isAnimationActive={true}
+                      animationDuration={300}
+                      animationEasing="ease-in-out"
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
                 <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: textSec, fontSize: 13 }}>
-                  加载预设或设置驱动/输出节点后显示曲线
+                  运行机构后即可实时看到位移曲线
                 </div>
               )}
             </div>
@@ -1117,13 +1420,26 @@ export default function Sandbox() {
           <div style={{ ...glass }}>
             <div style={{ fontSize: 10, fontWeight: 500, color: textSec, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 12 }}>动画控制</div>
             <button
-              onClick={() => { if (!locked) { const n = !state.playing; playingRef.current = n; dispatch({ type: 'SET_PLAYING', payload: n }) } }}
+              onClick={() => {
+                if (!locked) {
+                  const n = !state.playing
+                  playingRef.current = n
+                  if (n) {
+                    setShowInvalidOverlay(false)
+                    deadPointRef.current = false
+                    dispatch({ type: 'SET_DEAD_POINT', payload: false })
+                  }
+                  dispatch({ type: 'SET_PLAYING', payload: n })
+                }
+              }}
               disabled={locked}
               style={{
                 width: '100%', padding: '9px 0', borderRadius: 9,
                 background: state.playing && !locked ? 'rgba(167,139,250,0.15)' : 'rgba(34,211,238,0.15)',
                 color:      state.playing && !locked ? '#a78bfa' : '#22d3ee',
-                border:     state.playing && !locked ? '0.5px solid rgba(167,139,250,0.45)' : '0.5px solid rgba(34,211,238,0.45)',
+                border:     state.playing && !locked
+                  ? '0.5px solid rgba(167,139,250,0.45)'
+                  : '0.5px solid rgba(34,211,238,0.45)',
                 cursor: locked ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, opacity: locked ? 0.45 : 1,
               }}
             >{state.playing && !locked ? '⏸ 暂停' : '▶ 播放'}</button>
@@ -1132,8 +1448,12 @@ export default function Sandbox() {
             <div style={{
               marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '8px 12px', borderRadius: 9,
-              background: locked ? (isDark ? 'rgba(251,146,60,0.10)' : 'rgba(234,88,12,0.07)') : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'),
-              border: `0.5px solid ${locked ? (isDark ? 'rgba(251,146,60,0.40)' : 'rgba(234,88,12,0.30)') : (isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)')}`,
+              background: locked
+                ? (isDark ? 'rgba(251,146,60,0.10)' : 'rgba(234,88,12,0.07)')
+                : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'),
+              border: `0.5px solid ${locked
+                ? (isDark ? 'rgba(251,146,60,0.40)' : 'rgba(234,88,12,0.30)')
+                : (isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)')}`,
             }}>
               <span style={{ fontSize: 12, color: locked ? clrOutput : textSec, fontWeight: locked ? 500 : 400 }}>🔒 锁定时刻</span>
               <button onClick={handleLockToggle} style={{
@@ -1144,7 +1464,7 @@ export default function Sandbox() {
                 <span style={{ position: 'absolute', top: 2, left: locked ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
               </button>
             </div>
-            {locked && <p style={{ fontSize: 11, color: textSec, margin: '6px 0 0', lineHeight: 1.5 }}>点击位移图上任意点可跳转至该角度</p>}
+            {locked && <p style={{ fontSize: 11, color: textSec, margin: '6px 0 0', lineHeight: 1.5 }}>锁定时显示完整 0-360° 曲线，点击图表任意点跳转角度</p>}
 
             {/* Speed */}
             <div style={{ marginTop: 14 }}>
@@ -1157,33 +1477,75 @@ export default function Sandbox() {
                 style={{ width: '100%', accentColor: '#22d3ee' }} />
             </div>
 
-            {/* Manual angle */}
-            {(!state.playing || locked) && (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: textSec, marginBottom: 4 }}>
-                  <span>手动角度 θ</span>
-                  <span style={{ fontFamily: 'monospace', color: clrCrank, fontWeight: 600 }}>{currentAngleDeg}°</span>
-                </div>
-                <input type="range" min="0" max="359" step="1" value={currentAngleDeg}
-                  onChange={e => { thetaRef.current = (+e.target.value * Math.PI) / 180 }}
-                  style={{ width: '100%', accentColor: clrCrank }} />
+            {/* Fix 5: Manual theta slider — always works, stops playback on drag */}
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: textSec, marginBottom: 4 }}>
+                <span style={{ color: state.playing ? textSec : clrCrank, fontWeight: state.playing ? 400 : 600 }}>
+                  手动角度 θ {state.playing ? <span style={{ fontSize: 10, opacity: 0.6 }}>(播放中同步)</span> : ''}
+                </span>
+                <span style={{ fontFamily: 'monospace', color: clrCrank, fontWeight: 600 }}>{currentAngleDeg}°</span>
               </div>
-            )}
+              <input
+                type="range"
+                min="0"
+                max="359"
+                step="1"
+                value={currentAngleDeg}
+                // Fix 5: onMouseDown/onTouchStart 立即停止播放，抢占控制权
+                onMouseDown={() => {
+                  if (playingRef.current) {
+                    playingRef.current = false
+                    dispatch({ type: 'SET_PLAYING', payload: false })
+                  }
+                }}
+                onTouchStart={() => {
+                  if (playingRef.current) {
+                    playingRef.current = false
+                    dispatch({ type: 'SET_PLAYING', payload: false })
+                  }
+                }}
+                onChange={e => {
+                  // Fix 5: 直接写入 ref，立即生效，无需等待 React 重渲染
+                  const deg = parseInt(e.target.value, 10)
+                  thetaRef.current = (deg * Math.PI) / 180
+                  // 同步驱动节点位置，触发即时重绘
+                  const joints = jointsRef.current
+                  const driven = joints.find(j => j && j.driven)
+                  if (driven && driven.constraintType !== 'SLIDER' && driven.pivotId) {
+                    const pivot = joints.find(j => j && j.id === driven.pivotId)
+                    if (pivot && isFinite(pivot.x) && safeNum(driven.radius) > 0) {
+                      driven.x = pivot.x + driven.radius * Math.cos(thetaRef.current)
+                      driven.y = pivot.y + driven.radius * Math.sin(thetaRef.current)
+                    }
+                  }
+                  // 触发约束求解（单次）
+                  try {
+                    const idxMap = buildIdxMap(joints)
+                    solverSolve(joints, linksRef.current, idxMap, 60, 0.15)
+                  } catch { /* 静默跳过 */ }
+                  // 通知 React 更新显示数值
+                  dispatch({ type: 'SET_THETA', payload: thetaRef.current })
+                }}
+                style={{ width: '100%', accentColor: clrCrank }}
+              />
+              <div style={{ fontSize: 10, color: textSec, marginTop: 2, opacity: 0.7 }}>
+                拖动自动停止播放并立即更新机构位置
+              </div>
+            </div>
           </div>
 
-          {/* Presets */}
+          {/* Fix 2: Presets — removed simple crank */}
           <div style={{ ...glass }}>
             <div style={{ fontSize: 10, fontWeight: 500, color: textSec, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>快速预设</div>
             {[
               { id: 'fourbar', label: '🔧 四连杆 (four-bar)' },
               { id: 'slider',  label: '🎯 曲柄滑块 (slider-crank)' },
-              { id: 'crank',   label: '🌀 简单曲柄 (crank)' },
             ].map(p => (
               <button key={p.id} onClick={() => loadPreset(p.id)} style={{
                 display: 'block', width: '100%', textAlign: 'left', marginBottom: 6,
                 padding: '7px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
                 background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-                border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'}`,
+                border:     `0.5px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'}`,
                 color: textPri,
               }}>{p.label}</button>
             ))}
@@ -1191,6 +1553,8 @@ export default function Sandbox() {
               jointsRef.current = []; linksRef.current = []; trailRef.current = {}
               playingRef.current = false; selectedRef.current = []; _idSeq = 1
               prevPosRef.current = {}; deadPointRef.current = false
+              setShowInvalidOverlay(false)
+              setLiveChartData([])
               dispatch({ type: 'CLEAR' })
             }} style={{
               display: 'block', width: '100%', textAlign: 'left', marginTop: 4,
@@ -1217,15 +1581,26 @@ export default function Sandbox() {
                     }}
                     onChange={e => {
                       const j = jointsRef.current.find(j => j && j.id === selJoint.id)
-                      if (j) { const v = parseFloat(e.target.value); if (isFinite(v)) { j[key] = v; dispatch({ type: 'UPDATE_JOINT', id: j.id, patch: { [key]: v } }) } }
+                      if (j) { 
+                        const v = parseFloat(e.target.value); 
+                        if (isFinite(v)) { 
+                          j[key] = v; 
+                          const patch = { [key]: v }
+                          // ✅ FIX: 如果是滑块，面板手动改坐标时，轨道锚点也要跟着平移
+                          if (j.constraintType === 'SLIDER') {
+                            j._axisOrigin = { ...j._axisOrigin, [key]: v }
+                            patch._axisOrigin = j._axisOrigin
+                          }
+                          dispatch({ type: 'UPDATE_JOINT', id: j.id, patch }) 
+                        } 
+                      }
                     }} />
                   </label>
                 ))}
-                {/* Slider: axis angle */}
                 {selJoint.constraintType === 'SLIDER' && (
                   <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: textSec }}>
                     轴角度°
-                    <input type="number" defaultValue={
+                    <input type="number" value={
                       selJoint._axisDir ? Math.round(Math.atan2(selJoint._axisDir.y, selJoint._axisDir.x) * 180 / Math.PI) : 0
                     } step="15" style={{
                       width: 72, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
@@ -1239,7 +1614,9 @@ export default function Sandbox() {
                       const j = jointsRef.current.find(j => j && j.id === selJoint.id)
                       if (j) {
                         j._axisDir = { x: Math.cos(ang), y: Math.sin(ang) }
-                        dispatch({ type: 'UPDATE_JOINT', id: j.id, patch: { _axisDir: j._axisDir } })
+                        // ✅ FIX: 将轨道的锚点重置到滑块当前的中心，保证原地旋转
+                        j._axisOrigin = { x: j.x, y: j.y }
+                        dispatch({ type: 'UPDATE_JOINT', id: j.id, patch: { _axisDir: j._axisDir, _axisOrigin: j._axisOrigin } })
                       }
                     }} />
                   </label>
@@ -1253,7 +1630,8 @@ export default function Sandbox() {
                     <button style={{
                       flex: 1, padding: '5px 0', borderRadius: 7, cursor: 'pointer', fontSize: 11,
                       background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                      border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`, color: textPri
+                      border:     `0.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`,
+                      color: textPri,
                     }} onClick={() => {
                       const j = jointsRef.current.find(j => j && j.id === selJoint.id)
                       if (!j) return
@@ -1263,13 +1641,13 @@ export default function Sandbox() {
                     }}>{selJoint.fixed ? '取消固定' : '设为固定 (F)'}</button>
                     <button style={{
                       flex: 1, padding: '5px 0', borderRadius: 7, cursor: 'pointer', fontSize: 11,
-                      background: 'rgba(52,211,153,0.10)', border: '0.5px solid rgba(52,211,153,0.30)', color: '#34d399'
+                      background: 'rgba(52,211,153,0.10)', border: '0.5px solid rgba(52,211,153,0.30)', color: '#34d399',
                     }} onClick={() => makeDriven(selJoint)}>设为驱动</button>
                   </div>
                 )}
                 <button style={{
                   padding: '5px 0', borderRadius: 7, cursor: 'pointer', fontSize: 11,
-                  background: 'rgba(251,146,60,0.10)', border: '0.5px solid rgba(251,146,60,0.30)', color: '#fb923c'
+                  background: 'rgba(251,146,60,0.10)', border: '0.5px solid rgba(251,146,60,0.30)', color: '#fb923c',
                 }} onClick={() => {
                   jointsRef.current.forEach(j => { if (j) j._isOutput = false })
                   const j = jointsRef.current.find(j => j && j.id === selJoint.id)
@@ -1304,7 +1682,7 @@ export default function Sandbox() {
             <div>S — 选择/拖拽节点</div>
             <div>A — 添加旋转节点</div>
             <div>P — 添加滑块副</div>
-            <div><span style={{ color: isDark ? '#38bdf8' : '#0284c7', fontWeight: 600 }}>L — 连接已选两节点（按着Shift键连续选取2个构建）</span></div>
+            <div><span style={{ color: isDark ? '#38bdf8' : '#0284c7', fontWeight: 600 }}>L — 连接已选两节点（Shift 多选后按 L）</span></div>
             <div>F — 切换固定状态</div>
             <div>Del — 删除选中对象</div>
             <div>Space — 运行/暂停</div>
@@ -1323,7 +1701,8 @@ export default function Sandbox() {
         <strong style={{ color: textPri }}>机构说明：</strong>
         旋转节点（圆形）可被连杆约束；固定节点（F）作为地面铰链；驱动节点（D）绕固定点做圆周运动；
         <span style={{ color: isDark ? '#38bdf8' : '#0284c7' }}>滑块副（矩形）被限制沿导轨方向平动</span>，可在属性面板调节轴角度；
-        输出节点（E）的轨迹显示于位移曲线图。当机构进入死点（几何无解）时画布边框闪红并显示⚠提示。
+        输出节点（E）的轨迹随时间（3秒）自然淡出，并在位移曲线图中显示完整 0-360° 的运动规律。
+        锁定模式下可查看全周期静态曲线，点击图表跳转至对应角度。
       </div>
     </div>
   )
