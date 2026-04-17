@@ -95,7 +95,7 @@ python -c "import main"
 然后导入题库：
 
 ```bash
-python ../knowledge/scripts/import_exercises.py
+python knowledge/scripts/import_exercises.py
 ```
 
 如果已有题库并询问是否清空重导，按需输入 `y` 或直接回车取消。
