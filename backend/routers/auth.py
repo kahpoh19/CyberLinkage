@@ -120,7 +120,7 @@ def get_me(user: User = Depends(require_user)):
         "created_at": user.created_at,
         "display_name": user.display_name,
         "avatar": user.avatar,
-        "font_size": user.font_size or 14,
-        "font_family": user.font_family or "default",
-        "theme": user.theme or "light",
+        "font_size": getattr(user, "font_size", 14) or 14,
+        "font_family": getattr(user, "font_family", "default") or "default",
+        "theme": getattr(user, "theme", "light") or "light",
     }

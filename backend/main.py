@@ -6,11 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 
 from database import engine, Base
-<<<<<<< HEAD
-from routers import auth, chat, diagnosis, graph, path, report
-=======
-from routers import auth, diagnosis, graph, path, report, profile
->>>>>>> 16d1217 (use remote App.jsx)
+from routers import auth, chat, diagnosis, graph, path, report, profile
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -24,18 +20,21 @@ def ensure_user_profile_columns():
     columns = {col["name"] for col in inspector.get_columns("users")}
 
     with engine.begin() as conn:
+        if "font_size" not in columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN font_size INTEGER DEFAULT 14"))
+            columns.add("font_size")
+
+        if "font_family" not in columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN font_family VARCHAR(20) DEFAULT 'default'"))
+            columns.add("font_family")
+
         if "theme" not in columns:
-          conn.execute(text("ALTER TABLE users ADD COLUMN theme VARCHAR(10) DEFAULT 'light'"))
-          columns.add("theme")
-
-        if "font_size" in columns:
-            conn.execute(text("UPDATE users SET font_size = 14 WHERE font_size IS NULL"))
-
-        if "font_family" in columns:
-            conn.execute(text("UPDATE users SET font_family = 'default' WHERE font_family IS NULL"))
-
-        if "theme" in columns:
-            conn.execute(text("UPDATE users SET theme = 'light' WHERE theme IS NULL"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN theme VARCHAR(10) DEFAULT 'light'"))
+            columns.add("theme")
+            
+        conn.execute(text("UPDATE users SET font_size = 14 WHERE font_size IS NULL"))
+        conn.execute(text("UPDATE users SET font_family = 'default' WHERE font_family IS NULL"))
+        conn.execute(text("UPDATE users SET theme = 'light' WHERE theme IS NULL"))
 
 
 ensure_user_profile_columns()

@@ -1,12 +1,17 @@
 import React, { useRef, useEffect, useState } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Typography, Avatar, Button, Space, Tooltip, Modal, Form, Input, message, Radio } from 'antd'
-import {
-  DashboardOutlined, ExperimentOutlined, ApartmentOutlined,
-  NodeIndexOutlined, LogoutOutlined,
-  SunOutlined, MoonOutlined,
-  UserOutlined, ReadOutlined, SolutionOutlined,
-} from '@ant-design/icons'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown } from 'antd'
+import DashboardOutlined from '@ant-design/icons/es/icons/DashboardOutlined'
+import ExperimentOutlined from '@ant-design/icons/es/icons/ExperimentOutlined'
+import ApartmentOutlined from '@ant-design/icons/es/icons/ApartmentOutlined'
+import NodeIndexOutlined from '@ant-design/icons/es/icons/NodeIndexOutlined'
+import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
+import LogoutOutlined from '@ant-design/icons/es/icons/LogoutOutlined'
+import SunOutlined from '@ant-design/icons/es/icons/SunOutlined'
+import MoonOutlined from '@ant-design/icons/es/icons/MoonOutlined'
+import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
+import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
+import ToolOutlined from '@ant-design/icons/es/icons/ToolOutlined'
 
 
 import Dashboard from './pages/Dashboard'
@@ -14,26 +19,54 @@ import Diagnosis from './pages/Diagnosis'
 import KnowledgeGraph from './pages/KnowledgeGraph'
 import LearningPath from './pages/LearningPath'
 import Chat from './pages/Chat'
+import TeacherUpload from './pages/TeacherUpload'
 import useUserStore from './store/userStore'
 import { login, register, getMe } from './api'
+import Sandbox from './pages/Sandbox'
 import Profile from './pages/Profile'
+import { UserOutlined } from '@ant-design/icons'
+import { getAvatarUrl, getDisplayName } from './utils/user'
 
 const { Sider, Content, Header } = Layout
 const { Title } = Typography
+
+const menuItems = [
+  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+  { key: '/diagnosis', icon: <ExperimentOutlined />, label: '诊断测评' },
+  { key: '/graph', icon: <ApartmentOutlined />, label: '知识图谱' },
+  { key: '/path', icon: <NodeIndexOutlined />, label: '学习路径' },
+  { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
+  { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
+  { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
+  {
+    key: '/profile',
+    icon: <UserOutlined />,
+    label: '个人中心',
+  }
+]
 
 const DISCO_COLORS = [
   '#ff0080', '#ff4500', '#ffd700', '#00ff88',
   '#00cfff', '#bf00ff', '#ff69b4', '#ff6600',
 ]
 
-/* ---------------- Auth Modal ---------------- */
+function TeacherOnlyRoute({ children }) {
+  const { user, isAuthenticated } = useUserStore()
+
+  if (isAuthenticated() && !user) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: 100 }}>
+        正在验证身份...
+      </div>
+    )
+  }
+
+  return user?.role === 'teacher' ? children : <Navigate to="/" replace />
+}
+
+// ── Auth Modal (lifted here so both header button and Dashboard can open it) ──
 function AuthModal() {
-  const {
-    showAuthModal,
-    closeAuthModal,
-    login: storeLogin,
-    setUser,
-  } = useUserStore()
+  const { showAuthModal, closeAuthModal, login: storeLogin, setUser } = useUserStore()
   const [isRegister, setIsRegister] = useState(false)
   const [form] = Form.useForm()
 
@@ -48,10 +81,8 @@ function AuthModal() {
       const fn = isRegister ? register : login
       const res = await fn(values)
       storeLogin(null, res.data.access_token)
-
-      const me = await getProfile()
+      const me = await getMe()
       setUser(me.data)
-
       handleClose()
       message.success(isRegister ? '注册成功！' : '登录成功！')
     } catch (e) {
@@ -60,27 +91,31 @@ function AuthModal() {
   }
 
   return (
-    <Modal title={isRegister ? '注册' : '登录'} open={showAuthModal} onCancel={handleClose} footer={null}>
-      <Form form={form} onFinish={handleAuth} layout="vertical">
-        <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+    <Modal
+      title={isRegister ? '注册' : '登录'}
+      open={showAuthModal}
+      onCancel={handleClose}
+      footer={null}
+      destroyOnClose
+    >
+      <Form form={form} onFinish={handleAuth} layout="vertical" style={{ marginTop: 8 }} initialValues={{ role: 'student' }}>
+        <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
           <Input />
         </Form.Item>
-
         {isRegister && (
-          <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email' }]}>
+          <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
             <Input />
           </Form.Item>
         )}
-
-        <Form.Item name="password" label="密码" rules={[{ required: true, min: 6 }]}>
+        <Form.Item name="password" label="密码" rules={[{ required: true, min: 6, message: '密码至少6位' }]}>
           <Input.Password />
         </Form.Item>
 
         {isRegister && (
           <Form.Item name="role" label="身份">
             <Radio.Group>
-              <Radio.Button value="student">学生</Radio.Button>
-              <Radio.Button value="teacher">教师</Radio.Button>
+              <Radio.Button value="student">👨‍🎓 学生 (Student)</Radio.Button>
+              <Radio.Button value="teacher">👨‍🏫 教师 (Teacher)</Radio.Button>
             </Radio.Group>
           </Form.Item>
         )}
@@ -88,41 +123,60 @@ function AuthModal() {
         <Button type="primary" htmlType="submit" block>
           {isRegister ? '注册' : '登录'}
         </Button>
-
-        <Button type="link" block onClick={() => setIsRegister(!isRegister)}>
-          {isRegister ? '去登录' : '去注册'}
+        <Button type="link" block onClick={() => { form.resetFields(); setIsRegister(!isRegister) }}>
+          {isRegister ? '已有账号？去登录' : '没有账号？去注册'}
         </Button>
       </Form>
     </Modal>
   )
 }
 
-/* ---------------- App ---------------- */
 export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
   const {
     user,
-    token,
     logout,
-    isAuthenticated,
     setUser,
+    isAuthenticated,
     theme,
+    resolvedTheme,
     toggleTheme,
-    setTheme,
     discoMode,
     activateDisco,
-    deactivateDisco,
     openAuthModal,
   } = useUserStore()
 
-  const isDark = theme === 'dark'
+  const isDark = resolvedTheme === 'dark'
   const longPressTimer = useRef(null)
+  const longPressTriggered = useRef(false)
   const discoIntervalRef = useRef(null)
-  const discoTimeoutRef = useRef(null)
   const overlayRef = useRef(null)
+  const hasToken = isAuthenticated()
+  const isTeacher = user?.role === 'teacher'
+  const visibleMenuItems = isTeacher
+    ? menuItems
+    : menuItems.filter((item) => item.key !== '/teacher')
 
-  /* ---------- Disco颜色 ---------- */
+  useEffect(() => {
+    let cancelled = false
+
+    if (!hasToken || user) return undefined
+
+    getMe()
+      .then((res) => {
+        if (!cancelled) setUser(res.data)
+      })
+      .catch(() => {
+        if (!cancelled) logout()
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasToken, user, setUser, logout])
+
+  // Disco color flash loop
   useEffect(() => {
     if (discoMode) {
       let i = 0
@@ -133,48 +187,17 @@ export default function App() {
         }
         i++
       }, 150)
-
-      discoTimeoutRef.current = setTimeout(() => {
-        deactivateDisco()
-      }, 10000)
     } else {
       clearInterval(discoIntervalRef.current)
-      clearTimeout(discoTimeoutRef.current)
       if (overlayRef.current) overlayRef.current.style.opacity = '0'
     }
+    return () => clearInterval(discoIntervalRef.current)
+  }, [discoMode])
 
-    return () => {
-      clearInterval(discoIntervalRef.current)
-      clearTimeout(discoTimeoutRef.current)
-    }
-  }, [discoMode, deactivateDisco])
-
-  useEffect(() => {
-    if (!discoMode) return
-
-    const exit = () => {
-      // 避免刚进入 disco 的同一次点击立刻把它又退出
-      if (Date.now() - discoActivatedAtRef.current < 250) return
-      deactivateDisco()
-    }
-
-    const onKeyDown = () => exit()
-    const onPointerDown = () => exit()
-
-    window.addEventListener('keydown', onKeyDown, true)
-    window.addEventListener('mousedown', onPointerDown, true)
-    window.addEventListener('touchstart', onPointerDown, true)
-
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true)
-      window.removeEventListener('mousedown', onPointerDown, true)
-      window.removeEventListener('touchstart', onPointerDown, true)
-    }
-  }, [discoMode, deactivateDisco])
-
-  const handlePressStart = () => {
-    if (discoMode) return
+  const handleThemePressStart = () => {
+    longPressTriggered.current = false
     longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true
       activateDisco()
     }, 800)
   }
@@ -184,143 +207,272 @@ export default function App() {
   }
 
   const handleThemeClick = () => {
-    if (ignoreNextClickRef.current) {
-      ignoreNextClickRef.current = false
+    clearTimeout(longPressTimer.current)
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false
       return
     }
-
-    if (discoMode) {
-      deactivateDisco()
-    } else {
-      toggleTheme()
-    }
+    toggleTheme()
   }
 
-  const roleLabel = getRoleLabel(user?.role)
-  const roleIcon = user?.role === 'teacher' ? <SolutionOutlined /> : <ReadOutlined />
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
+
+  const currentThemeLabel = theme === 'auto'
+    ? `Auto（当前 ${isDark ? 'Dark' : 'Light'}）`
+    : theme === 'light'
+      ? 'Light'
+      : 'Dark'
+  const nextThemeLabel = theme === 'auto' ? 'Light' : theme === 'light' ? 'Dark' : 'Auto'
+  const themeButtonTitle = discoMode
+    ? 'DISCO!'
+    : `${currentThemeLabel}，点击切换到 ${nextThemeLabel}，长按开启 DISCO MODE`
+  const themeButtonIcon = discoMode
+    ? <span style={{ fontSize: 18 }}>🪩</span>
+    : theme === 'auto'
+      ? <SyncOutlined style={{ fontSize: 18, color: '#1677ff' }} />
+      : theme === 'light'
+        ? <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
+        : <MoonOutlined style={{ fontSize: 18, color: '#f0f0f0' }} />
+  const headerIconButtonStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    lineHeight: 1,
+    padding: 0,
+    borderRadius: '50%',
+  }
+  const headerActionsStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    lineHeight: 1,
+  }
+  const userMenuItems = [
+    {
+      key: 'profile',
+      disabled: true,
+      label: (
+        <div style={{ minWidth: 120, lineHeight: 1.4 }}>
+          <div style={{ fontWeight: 600 }}>{getDisplayName(user) || 'User'}</div>
+          <div style={{ fontSize: 12, color: '#8c8c8c' }}>
+            {user?.role === 'teacher' ? 'Teacher' : 'Student'}
+          </div>
+        </div>
+      ),
+    },
+    { type: 'divider' },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '退出登录',
+    },
+  ]
 
   return (
     <Layout style={{ minHeight: '100vh', position: 'relative' }}>
+
+      {/* Disco overlay */}
       <div
         ref={overlayRef}
         style={{
-          position: 'fixed',
-          inset: 0,
+          position: 'fixed', inset: 0,
           opacity: 0,
-          pointerEvents: 'none',
+          pointerEvents: discoMode ? 'auto' : 'none',
           zIndex: 9999,
+          transition: 'background 0.12s ease, opacity 0.3s ease',
           mixBlendMode: 'screen',
+          cursor: discoMode ? 'pointer' : 'default',
+        }}
+        onClick={() => {
+          if (discoMode) useUserStore.getState().deactivateDisco()
         }}
       />
 
       {discoMode && (
         <div style={{
-          position: 'fixed',
-          top: 0,
-          width: '100%',
-          zIndex: 10000,
-          textAlign: 'center',
-          background: 'linear-gradient(90deg,#ff0080,#ffd700,#00ff88,#00cfff)',
-          color: '#fff',
+          position: 'fixed', top: 0, left: 0, right: 0,
+          zIndex: 10000, textAlign: 'center',
+          padding: '6px 0',
+          background: 'linear-gradient(90deg,#ff0080,#ffd700,#00ff88,#00cfff,#bf00ff,#ff0080)',
+          backgroundSize: '200% 100%',
+          animation: 'discoSlide 1s linear infinite',
+          fontSize: 14, fontWeight: 600, color: '#fff',
+          letterSpacing: 4,
+          pointerEvents: 'none',
         }}>
           🕺 DISCO MODE 🕺
         </div>
       )}
 
       {discoMode && (
-        <img
-          src={`/disco.gif?t=${Date.now()}`}
-          alt="disco"
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 260,
-            zIndex: 10001,
-            pointerEvents: 'none',
-          }}
-        />
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9998,
+          pointerEvents: 'none',
+        }}>
+          <img
+            src="/disco.gif"
+            alt="disco"
+            style={{ width: 320, borderRadius: 16, opacity: 0.92 }}
+          />
+        </div>
       )}
 
-      <Sider theme={isDark ? 'dark' : 'light'}>
-        <div
-          style={{
-            height: 64,
-            display: 'flex',
-            alignItems: 'center',
-            paddingLeft: 24,
-            fontSize: 20,
-            fontWeight: 700,
-            color: isDark ? '#ffffff' : '#111111',
-            borderBottom: isDark ? '1px solid #222' : '1px solid #eee',
-          }}
-        >
-          CyberLinkage
-        </div>
+      <style>{`
+        @keyframes discoSlide {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        @keyframes discoPulse {
+          0%, 100% { transform: scale(1) rotate(0deg); }
+          25% { transform: scale(1.3) rotate(-15deg); }
+          75% { transform: scale(1.3) rotate(15deg); }
+        }
+        .disco-btn-icon {
+          animation: ${discoMode ? 'discoPulse 0.4s ease-in-out infinite' : 'none'};
+          display: inline-flex;
+        }
+      `}</style>
 
+      <Sider
+        breakpoint="lg"
+        collapsedWidth="80"
+        theme={isDark ? 'dark' : 'light'}
+        style={discoMode ? { filter: 'hue-rotate(var(--disco-hue, 0deg))' } : {}}
+      >
+        <div style={{ padding: '16px', textAlign: 'center' }}>
+          <Title level={4} style={{ margin: 0, color: discoMode ? '#ff0080' : '#1677ff', transition: 'color 0.15s' }}>
+            {discoMode ? '🕺 CyberLinkage' : '🧠 CyberLinkage'}
+          </Title>
+        </div>
         <Menu
+          mode="inline"
+          theme={isDark ? 'dark' : 'light'}
           selectedKeys={[location.pathname]}
+          items={visibleMenuItems}
           onClick={({ key }) => navigate(key)}
-          items={[
-            { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-            { key: '/graph', icon: <ApartmentOutlined />, label: '知识图谱' },
-            { key: '/diagnosis', icon: <ExperimentOutlined />, label: '诊断测评' },
-            { key: '/learning', icon: <NodeIndexOutlined />, label: '学习路径' },
-            { key: '/profile', icon: <UserOutlined />, label: '个人中心' },
-          ]}
         />
       </Sider>
 
       <Layout>
-        <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Title level={5}>CyberLinkage</Title>
-
-          <Space
+        <Header style={{
+          background: isDark ? '#141414' : '#fff',
+          padding: '0 24px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
+          position: 'relative',
+          zIndex: 10,
+          height: 'auto',
+          minHeight: 64,
+          lineHeight: 1,
+        }}>
+          <Title
+            level={5}
             style={{
-              marginLeft: 'auto',
-              display: 'flex',
-              alignItems: 'center',
+              margin: 0,
+              lineHeight: 1.3,
+              color: isDark ? '#ffffff' : '#111111',
             }}
           >
+            基于知识图谱的个性化学习伴侣
+          </Title>
+          <div style={headerActionsStyle}>
             <Button
+              type="text"
               shape="circle"
-              onMouseDown={handlePressStart}
-              onMouseUp={handlePressEnd}
-              onClick={toggleTheme}
+              title={themeButtonTitle}
+              aria-label={themeButtonTitle}
+              onMouseDown={handleThemePressStart}
+              onMouseUp={handleThemePressEnd}
+              onMouseLeave={handleThemePressEnd}
+              onTouchStart={handleThemePressStart}
+              onTouchEnd={handleThemePressEnd}
+              onClick={handleThemeClick}
               icon={
-                discoMode
-                  ? <img src="/disco.gif" style={{ width: 20 }} />
-                  : isDark
-                    ? <SunOutlined />
-                    : <MoonOutlined />
+                <span className="disco-btn-icon">
+                  {themeButtonIcon}
+                </span>
               }
+              style={{
+                ...headerIconButtonStyle,
+                transition: 'transform 0.3s ease',
+                transform: discoMode ? 'rotate(12deg)' : 'rotate(0deg)',
+                outline: discoMode ? '2px solid #ff0080' : 'none',
+              }}
             />
 
             {isAuthenticated() ? (
               <>
-                <Avatar src={user?.avatar}>
-                  {!user?.avatar && user?.username?.[0]}
-                </Avatar>
-                <Button icon={<LogoutOutlined />} onClick={logout} />
+                {user?.role === 'teacher' && (
+                    <Tag color="blue" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', height: 24 }}>
+                      👨‍🏫 Teacher Mode
+                    </Tag>
+                )}
+                <Dropdown
+                  trigger={['click']}
+                  menu={{
+                    items: userMenuItems,
+                    onClick: ({ key }) => {
+                      if (key === 'logout') handleLogout()
+                    },
+                  }}
+                >
+                  <Avatar
+                    src={getAvatarUrl(user?.avatar)}
+                    style={{
+                      backgroundColor: discoMode ? '#ff0080' : '#1677ff',
+                      transition: 'background 0.15s',
+                      flex: '0 0 auto',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {!user?.avatar && (getDisplayName(user)?.[0]?.toUpperCase() || 'U')}
+                  </Avatar>
+                </Dropdown>
               </>
             ) : (
-              <Button onClick={openAuthModal}>登录</Button>
+              <Button type="primary" onClick={openAuthModal}>登录</Button>
             )}
           </div>
         </Header>
 
-        <Content style={{ margin: 24 }}>
+        <Content style={{ margin: '24px', minHeight: 280 }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/graph" element={<KnowledgeGraph />} />
             <Route path="/diagnosis" element={<Diagnosis />} />
-            <Route path="/learning" element={<LearningPath />} />
+            <Route path="/graph" element={<KnowledgeGraph />} />
+            <Route path="/path" element={<LearningPath />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/profile" element={<Profile />} />
+            <Route
+              path="/teacher"
+              element={(
+                <TeacherOnlyRoute>
+                  <TeacherUpload />
+                </TeacherOnlyRoute>
+              )}
+            />
+            <Route path="/sandbox" element={<Sandbox />} />
+
           </Routes>
         </Content>
       </Layout>
 
+      {/* Single AuthModal instance for the whole app */}
       <AuthModal />
     </Layout>
   )

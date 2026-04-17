@@ -21,6 +21,10 @@ class User(Base):
     avatar = Column(String(255), nullable=True)
     display_name = Column(String(50), nullable=True)
 
+    font_size = Column(Integer, nullable=True, default=14)
+    font_family = Column(String(20), nullable=True, default="default")
+    theme = Column(String(10), nullable=True, default="light")
+
     knowledge_states = relationship("KnowledgeState", back_populates="user")
     practice_records = relationship("PracticeRecord", back_populates="user")
     documents = relationship("UserDocument", back_populates="user")
