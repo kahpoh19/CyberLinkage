@@ -12,7 +12,7 @@ import MoonOutlined from '@ant-design/icons/es/icons/MoonOutlined'
 import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
 import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
 import ToolOutlined from '@ant-design/icons/es/icons/ToolOutlined'
-
+import FileTextOutlined from '@ant-design/icons/es/icons/FileTextOutlined'
 
 import Dashboard from './pages/Dashboard'
 import Diagnosis from './pages/Diagnosis'
@@ -20,6 +20,7 @@ import KnowledgeGraph from './pages/KnowledgeGraph'
 import LearningPath from './pages/LearningPath'
 import Chat from './pages/Chat'
 import TeacherUpload from './pages/TeacherUpload'
+import StudentResources from './pages/StudentResources'
 import useUserStore from './store/userStore'
 import { login, register, getMe } from './api'
 import Sandbox from './pages/Sandbox'
@@ -33,14 +34,15 @@ const SIDER_WIDTH = 200
 const SIDER_COLLAPSED_WIDTH = 80
 
 const menuItems = [
-  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/diagnosis', icon: <ExperimentOutlined />, label: '诊断测评' },
-  { key: '/graph', icon: <ApartmentOutlined />, label: '知识图谱' },
-  { key: '/path', icon: <NodeIndexOutlined />, label: '学习路径' },
-  { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
-  { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
-  { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
-  { key: '/profile', icon: <UserOutlined />, label: '个人中心' },
+  { key: '/',                   icon: <DashboardOutlined />,  label: '仪表盘'  },
+  { key: '/diagnosis',          icon: <ExperimentOutlined />, label: '诊断测评' },
+  { key: '/graph',              icon: <ApartmentOutlined />,  label: '知识图谱' },
+  { key: '/path',               icon: <NodeIndexOutlined />,  label: '学习路径' },
+  { key: '/chat',               icon: <RobotOutlined />,      label: 'AI 答疑'  },
+  { key: '/student-resources',  icon: <FileTextOutlined />,   label: '学生资料' },
+  { key: '/teacher',            icon: <BookOutlined />,       label: '教师上传' },
+  { key: '/sandbox',            icon: <ToolOutlined />,       label: '实战工坊' },
+  { key: '/profile',            icon: <UserOutlined />,       label: '个人中心' },
 ]
 
 const DISCO_COLORS = [
@@ -62,7 +64,7 @@ function TeacherOnlyRoute({ children }) {
   return user?.role === 'teacher' ? children : <Navigate to="/" replace />
 }
 
-// ── Auth Modal (lifted here so both header button and Dashboard can open it) ──
+// ── Auth Modal ────────────────────────────────────────────────────────────────
 function AuthModal() {
   const { showAuthModal, closeAuthModal, login: storeLogin, setUser } = useUserStore()
   const [isRegister, setIsRegister] = useState(false)
@@ -155,9 +157,16 @@ export default function App() {
   const overlayRef = useRef(null)
   const hasToken = isAuthenticated()
   const isTeacher = user?.role === 'teacher'
+
+  // ── Sidebar visibility rules ──────────────────────────────────────────────
+  // /teacher           → teachers only
+  // /student-resources → non-teachers (students + guests)
+  // /profile           → authenticated users only
+  // everything else    → always visible
   const visibleMenuItems = menuItems.filter((item) => {
-    if (item.key === '/teacher') return isTeacher
-    if (item.key === '/profile') return hasToken
+    if (item.key === '/teacher')           return isTeacher
+    if (item.key === '/student-resources') return !isTeacher
+    if (item.key === '/profile')           return hasToken
     return true
   })
 
@@ -469,11 +478,12 @@ export default function App() {
 
         <Content style={{ margin: '24px', minHeight: 280 }}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/diagnosis" element={<Diagnosis />} />
-            <Route path="/graph" element={<KnowledgeGraph />} />
-            <Route path="/path" element={<LearningPath />} />
-            <Route path="/chat" element={<Chat />} />
+            <Route path="/"                    element={<Dashboard />} />
+            <Route path="/diagnosis"           element={<Diagnosis />} />
+            <Route path="/graph"               element={<KnowledgeGraph />} />
+            <Route path="/path"                element={<LearningPath />} />
+            <Route path="/chat"                element={<Chat />} />
+            <Route path="/student-resources"   element={<StudentResources />} />
             <Route
               path="/profile"
               element={isAuthenticated() ? <Profile /> : <Navigate to="/" replace />}
