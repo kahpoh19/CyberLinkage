@@ -19,8 +19,19 @@ export const getMe = () => api.get('/auth/me')
 
 // ─── 诊断测评 ─────────────────────────────────────
 
-export const startDiagnosis = (course = 'c_language', count = 10) =>
-  api.get('/diagnosis/start', { params: { course, count } })
+export const startDiagnosis = (course = 'c_language', count = 10, options = {}) => {
+  const params = { course }
+
+  if (typeof count === 'number') {
+    params.count = count
+  }
+
+  if (options.knowledgePointId) {
+    params.knowledge_point_id = options.knowledgePointId
+  }
+
+  return api.get('/diagnosis/start', { params })
+}
 
 export const submitDiagnosis = (answers) =>
   api.post('/diagnosis/submit', { answers })

@@ -1,8 +1,8 @@
 import React from 'react'
-import { Progress, Tag, Typography } from 'antd'
+import { Button, Progress, Tag, Typography } from 'antd'
 import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
-import ClockCircleOutlined from '@ant-design/icons/es/icons/ClockCircleOutlined'
 import LockOutlined from '@ant-design/icons/es/icons/LockOutlined'
+import PlayCircleOutlined from '@ant-design/icons/es/icons/PlayCircleOutlined'
 import SyncOutlined from '@ant-design/icons/es/icons/SyncOutlined'
 
 const { Paragraph, Text } = Typography
@@ -38,6 +38,7 @@ export default function PathTimeline({
   items = [],
   selectedId = null,
   onSelect,
+  onStartPractice,
   isDark = false,
 }) {
   return (
@@ -48,10 +49,17 @@ export default function PathTimeline({
         const active = item.id === selectedId
 
         return (
-          <button
+          <div
             key={item.id}
-            type="button"
+            role="button"
+            tabIndex={0}
             onClick={() => onSelect?.(item)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onSelect?.(item)
+              }
+            }}
             style={{
               position: 'relative',
               width: '100%',
@@ -151,14 +159,24 @@ export default function PathTimeline({
                     ) : null}
                   </div>
 
-                  <div style={{ textAlign: 'right', minWidth: 120 }}>
-                    <div style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.45)' : '#64748b' }}>
-                      建议投入
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>
-                      <ClockCircleOutlined style={{ marginRight: 6, color: '#1677ff' }} />
-                      {item.estimated_minutes} 分钟
-                    </div>
+                  <div style={{ minWidth: 128, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      type={active ? 'primary' : 'default'}
+                      icon={<PlayCircleOutlined />}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onStartPractice?.(item)
+                      }}
+                      style={{
+                        borderRadius: 999,
+                        height: 38,
+                        paddingInline: 18,
+                        fontWeight: 600,
+                        boxShadow: active ? '0 10px 20px rgba(22,119,255,0.18)' : 'none',
+                      }}
+                    >
+                      开始做题
+                    </Button>
                   </div>
                 </div>
 
@@ -183,11 +201,11 @@ export default function PathTimeline({
                   <Text style={{ color: getMasteryColor(item.mastery || 0), fontWeight: 600 }}>
                     掌握度 {masteryPercent}%
                   </Text>
-                  <Text type="secondary">{active ? '已选中，查看右侧题目' : '点击查看对应题目'}</Text>
+                  <Text type="secondary">{active ? '已选中，查看右侧题目或直接开始做题' : '点击查看对应题目'}</Text>
                 </div>
               </div>
             </div>
-          </button>
+          </div>
         )
       })}
     </div>

@@ -1,14 +1,15 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
-  Card, Button, Radio, Space, Progress, Result, Tag, Typography, message, Badge
+  Card, Button, Radio, Space, Progress, Spin, Tag, Typography, message
 } from 'antd'
 import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
 import CloseCircleOutlined from '@ant-design/icons/es/icons/CloseCircleOutlined'
 import RightOutlined from '@ant-design/icons/es/icons/RightOutlined'
 import LeftOutlined from '@ant-design/icons/es/icons/LeftOutlined'
-import TrophyOutlined from '@ant-design/icons/es/icons/TrophyOutlined'
 import ReloadOutlined from '@ant-design/icons/es/icons/ReloadOutlined'
 import NodeIndexOutlined from '@ant-design/icons/es/icons/NodeIndexOutlined'
+import PlayCircleOutlined from '@ant-design/icons/es/icons/PlayCircleOutlined'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { startDiagnosis, submitDiagnosis } from '../api'
 import useUserStore from '../store/userStore'
 
@@ -234,31 +235,115 @@ function ReviewCard({ exercise, userAnswer, index, isDark }) {
 
 // ── Main Diagnosis page ─────────────────────────────────────────
 export default function Diagnosis() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const isDark = useUserStore((s) => s.resolvedTheme === 'dark')
+  const currentSubject = useUserStore((s) => s.currentSubject)
   const [phase, setPhase] = useState('start')   // start | testing | result
   const [exercises, setExercises] = useState([])
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState({})
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [sessionMeta, setSessionMeta] = useState(null)
+  const autoLaunchKeyRef = useRef('')
+  const launchRequestIdRef = useRef(0)
 
-  const handleStart = async () => {
+  const routeKnowledgePointId = searchParams.get('knowledgePointId') || ''
+  const routeKnowledgePointName = searchParams.get('knowledgePointName') || routeKnowledgePointId
+  const routeSubject = searchParams.get('subject') || currentSubject
+  const routeMode = searchParams.get('mode') || ''
+  const routePractice = routeKnowledgePointId
+    ? {
+      mode: routeMode || 'path',
+      subject: routeSubject,
+      knowledgePointId: routeKnowledgePointId,
+      knowledgePointName: routeKnowledgePointName,
+    }
+    : null
+  const activeSession = routePractice?.knowledgePointId
+    ? (sessionMeta || routePractice)
+    : sessionMeta?.knowledgePointId
+      ? null
+      : sessionMeta
+
+  const resetToDiagnosisStart = () => {
+    launchRequestIdRef.current += 1
+    autoLaunchKeyRef.current = ''
+    setPhase('start')
+    setExercises([])
+    setAnswers({})
+    setCurrent(0)
+    setResult(null)
+    setLoading(false)
+    setSessionMeta(null)
+  }
+
+  const launchDiagnosis = async (options = {}) => {
+    const subject = options.subject || currentSubject
+    const knowledgePointId = options.knowledgePointId || null
+    const knowledgePointName = options.knowledgePointName || knowledgePointId || ''
+    const requestId = ++launchRequestIdRef.current
+
     setLoading(true)
     try {
-      const res = await startDiagnosis('c_language', 10)
+      const res = await startDiagnosis(
+        subject,
+        knowledgePointId ? null : 10,
+        knowledgePointId ? { knowledgePointId } : {}
+      )
+
+      if (requestId !== launchRequestIdRef.current) return
+
       if (!res.data || res.data.length === 0) {
-        message.warning('题库暂时为空，请联系管理员导入题目')
+        message.warning(
+          knowledgePointId
+            ? '该知识点暂未配置练习题，请先查看右侧题目预览或联系管理员补充题库'
+            : '题库暂时为空，请联系管理员导入题目'
+        )
         return
       }
+
       setExercises(res.data)
       setAnswers({})
       setCurrent(0)
+      setResult(null)
+      setSessionMeta({
+        mode: knowledgePointId ? 'path' : 'diagnosis',
+        subject,
+        knowledgePointId,
+        knowledgePointName,
+        total: res.data.length,
+      })
       setPhase('testing')
     } catch (e) {
+      if (requestId !== launchRequestIdRef.current) return
       message.error('获取题目失败：' + (e.response?.data?.detail || '网络错误'))
     } finally {
-      setLoading(false)
+      if (requestId === launchRequestIdRef.current) {
+        setLoading(false)
+      }
     }
+  }
+
+  useEffect(() => {
+    if (!routePractice?.knowledgePointId) return
+
+    const sessionKey = `${routePractice.subject}:${routePractice.knowledgePointId}`
+    if (autoLaunchKeyRef.current === sessionKey) return
+
+    autoLaunchKeyRef.current = sessionKey
+    launchDiagnosis(routePractice)
+  }, [routePractice?.subject, routePractice?.knowledgePointId])
+
+  useEffect(() => {
+    if (routePractice?.knowledgePointId) return
+    if (!sessionMeta?.knowledgePointId) return
+    resetToDiagnosisStart()
+  }, [routePractice?.knowledgePointId, sessionMeta?.knowledgePointId])
+
+  const handleStart = async () => {
+    await launchDiagnosis(routePractice || { subject: currentSubject })
   }
 
   const handleAnswer = (exerciseId, answer) => {
@@ -302,30 +387,54 @@ export default function Diagnosis() {
   }
 
   const handleReset = () => {
-    setPhase('start')
-    setExercises([])
-    setAnswers({})
-    setCurrent(0)
-    setResult(null)
+    if (activeSession?.knowledgePointId) {
+      launchDiagnosis(activeSession)
+      return
+    }
+
+    resetToDiagnosisStart()
   }
 
   // ── Start screen ──────────────────────────────────────────────
   if (phase === 'start') {
+    if (routePractice?.knowledgePointId && loading) {
+      return <Spin size="large" style={{ display: 'block', margin: '120px auto' }} />
+    }
+
     return (
       <div style={{ maxWidth: 560, margin: '60px auto', textAlign: 'center', padding: '0 16px' }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>🩺</div>
-        <Title level={2} style={{ marginBottom: 8 }}>诊断测评</Title>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>
+          {routePractice?.knowledgePointId ? '🎯' : '🩺'}
+        </div>
+        <Title level={2} style={{ marginBottom: 8 }}>
+          {routePractice?.knowledgePointId
+            ? `${routePractice.knowledgePointName || routePractice.knowledgePointId} 专项测评`
+            : '诊断测评'}
+        </Title>
         <Paragraph type="secondary" style={{ fontSize: 15, lineHeight: 1.8, marginBottom: 36 }}>
-          通过一组精选题目，快速定位你的薄弱知识点。
-          <br />
-          系统将使用 BKT 算法智能评估你的掌握程度。
+          {routePractice?.knowledgePointId ? (
+            <>
+              来自学习路线的开始做题入口，已为你准备该知识点下的全部相关题目。
+              <br />
+              完成后系统会继续使用 BKT 算法更新你的掌握程度。
+            </>
+          ) : (
+            <>
+              通过一组精选题目，快速定位你的薄弱知识点。
+              <br />
+              系统将使用 BKT 算法智能评估你的掌握程度。
+            </>
+          )}
         </Paragraph>
 
         <div style={{
           display: 'flex', gap: 16, justifyContent: 'center',
           flexWrap: 'wrap', marginBottom: 32
         }}>
-          {['🎯 10道精选题', '⏱️ 约10分钟', '📊 即时分析', '🛤️ 路径推荐'].map(t => (
+          {(routePractice?.knowledgePointId
+            ? ['📚 全部相关题目', '🧠 BKT 动态更新', '📊 即时反馈', '🛤️ 完成后返回学习路径']
+            : ['🎯 10道精选题', '⏱️ 约10分钟', '📊 即时分析', '🛤️ 路径推荐']
+          ).map(t => (
             <div key={t} style={{
               padding: '8px 18px', borderRadius: 24,
               background: 'rgba(22,119,255,0.06)',
@@ -339,7 +448,7 @@ export default function Diagnosis() {
           type="primary" size="large" onClick={handleStart} loading={loading}
           style={{ borderRadius: 10, height: 48, paddingInline: 40, fontSize: 16 }}
         >
-          开始诊断 <RightOutlined />
+          {routePractice?.knowledgePointId ? '开始做题' : '开始诊断'} <RightOutlined />
         </Button>
       </div>
     )
@@ -355,6 +464,29 @@ export default function Diagnosis() {
 
     return (
       <div style={{ padding: '8px 0' }}>
+        {activeSession?.knowledgePointId && (
+          <div
+            style={{
+              maxWidth: 680,
+              margin: '0 auto 18px',
+              padding: '14px 16px',
+              borderRadius: 16,
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(22,119,255,0.14)'}`,
+              background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(248,251,255,0.96)',
+            }}
+          >
+            <Space wrap size={[8, 8]} style={{ marginBottom: 8 }}>
+              <Tag color="processing">学习路线专项测评</Tag>
+              <Tag bordered={false}>{activeSession.knowledgePointName || activeSession.knowledgePointId}</Tag>
+              <Tag color="blue">{activeSession.knowledgePointId}</Tag>
+              <Tag color="purple">共 {exercises.length} 题</Tag>
+            </Space>
+            <Text type="secondary">
+              当前正在完成该知识点的全部相关题目，提交后会同步更新学习路线中的掌握度。
+            </Text>
+          </div>
+        )}
+
         {/* Dot navigator */}
         <div style={{
           display: 'flex', gap: 6, justifyContent: 'center',
@@ -608,17 +740,17 @@ export default function Diagnosis() {
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 8 }}>
           <Button
             size="large" onClick={handleReset}
-            icon={<ReloadOutlined />}
+            icon={activeSession?.knowledgePointId ? <PlayCircleOutlined /> : <ReloadOutlined />}
             style={{ borderRadius: 10 }}
           >
-            重新诊断
+            {activeSession?.knowledgePointId ? '再做一次' : '重新诊断'}
           </Button>
           <Button
-            type="primary" size="large" href="/path"
+            type="primary" size="large" onClick={() => navigate('/path')}
             icon={<NodeIndexOutlined />}
             style={{ borderRadius: 10 }}
           >
-            查看学习路径
+            {activeSession?.knowledgePointId ? '返回学习路径' : '查看学习路径'}
           </Button>
         </div>
       </div>

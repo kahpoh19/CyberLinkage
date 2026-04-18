@@ -68,17 +68,33 @@ class DiagnosisResult(BaseModel):
 @router.get("/start", response_model=List[ExerciseOut])
 def start_diagnosis(
     course: str = "c_language",
-    count: int = 10,
+    count: Optional[int] = None,
+    knowledge_point_id: Optional[str] = None,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """
     开始诊断测评：优先出未测试和薄弱知识点的题目。
 
+    若携带 knowledge_point_id，则进入学习路线中的专项测评模式，
+    直接返回该知识点下的全部相关题目（或按 count 限制数量）。
+
     修复点：
     1. 新用户没有 KnowledgeState 时，直接从全部题库随机取题
     2. options 字段统一 parse 为 dict
     """
+    target_count = count if isinstance(count, int) and count > 0 else 10
+
+    if knowledge_point_id:
+        query = (
+            db.query(Exercise)
+            .filter(Exercise.knowledge_point_id == knowledge_point_id)
+            .order_by(Exercise.difficulty.asc(), Exercise.id.asc())
+        )
+        if isinstance(count, int) and count > 0:
+            query = query.limit(count)
+        return query.all()
+
     # 用户当前掌握状态
     states = db.query(KnowledgeState).filter(
         KnowledgeState.user_id == user.id
@@ -106,7 +122,7 @@ def start_diagnosis(
 
         seen_ids: set = set()
         for kp in target_kps:
-            if len(exercises) >= count:
+            if len(exercises) >= target_count:
                 break
             kp_exercises = db.query(Exercise).filter(
                 Exercise.knowledge_point_id == kp
@@ -117,27 +133,27 @@ def start_diagnosis(
                     seen_ids.add(ex.id)
 
         # 若还不够，从剩余题库补充
-        if len(exercises) < count:
+        if len(exercises) < target_count:
             existing_ids = {e.id for e in exercises}
             more = (
                 db.query(Exercise)
                 .filter(Exercise.id.notin_(existing_ids))
-                .limit(count - len(exercises))
+                .limit(target_count - len(exercises))
                 .all()
             )
             exercises.extend(more)
     else:
         # 知识图谱不可用时，直接取全部题库
-        exercises = db.query(Exercise).limit(count).all()
+        exercises = db.query(Exercise).limit(target_count).all()
 
     # 最终保底：如果还是空，就取全部
     if not exercises:
-        exercises = db.query(Exercise).limit(count).all()
+        exercises = db.query(Exercise).limit(target_count).all()
 
     if not exercises:
         return []   # 题库真的是空的
 
-    return exercises[:count]
+    return exercises[:target_count]
 
 
 @router.post("/submit", response_model=DiagnosisResult)

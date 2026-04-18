@@ -3,6 +3,7 @@ import { Card, Spin, Empty, Typography, Statistic, Row, Col, Tag, Skeleton } fro
 import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
 import ReadOutlined from '@ant-design/icons/es/icons/ReadOutlined'
 import WarningOutlined from '@ant-design/icons/es/icons/WarningOutlined'
+import { useNavigate } from 'react-router-dom'
 import PathTimeline from '../components/PathTimeline'
 import { getPath, getPathExercises } from '../api'
 import useUserStore, { SUBJECTS } from '../store/userStore'
@@ -15,6 +16,7 @@ function DifficultyTag({ difficulty }) {
 }
 
 export default function LearningPath() {
+  const navigate = useNavigate()
   const currentSubject = useUserStore((s) => s.currentSubject)
   const resolvedTheme = useUserStore((s) => s.resolvedTheme)
   const subjectLabel = SUBJECTS.find((s) => s.id === currentSubject)?.label || currentSubject
@@ -193,7 +195,7 @@ export default function LearningPath() {
               {subjectLabel} 个性化学习路径
             </Title>
             <Paragraph style={{ margin: 0, fontSize: 15, color: isDark ? 'rgba(255,255,255,0.7)' : '#475569' }}>
-              按知识依赖和当前掌握度重排学习顺序。点击左侧任一知识点标题，右侧就会显示该知识点对应的题目。
+              按知识依赖和当前掌握度重排学习顺序。点击左侧知识点可查看题目预览，点击右侧“开始做题”可直接进入该知识点的专项测评。
             </Paragraph>
           </div>
 
@@ -272,12 +274,21 @@ export default function LearningPath() {
           <Card
             className="lp-panel-card"
             title="学习路线"
-            extra={<Text type="secondary">点击标题切换右侧题目</Text>}
+            extra={<Text type="secondary">点击标题切换右侧题目，按钮可直接开始测评</Text>}
           >
             <PathTimeline
               items={pathData.path}
               selectedId={selectedItem?.id || null}
               onSelect={(item) => setSelectedId(item.id)}
+              onStartPractice={(item) => {
+                const params = new URLSearchParams({
+                  subject: currentSubject,
+                  mode: 'path',
+                  knowledgePointId: item.id,
+                  knowledgePointName: item.name,
+                })
+                navigate(`/diagnosis?${params.toString()}`)
+              }}
               isDark={isDark}
             />
           </Card>
