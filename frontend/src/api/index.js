@@ -38,6 +38,9 @@ export const getMastery = (course = 'c_language') =>
 export const getPath = (course = 'c_language') =>
   api.get('/path/recommend', { params: { course } })
 
+export const getPathExercises = (knowledgePointId, count = 5) =>
+  api.get('/path/exercises', { params: { knowledge_point_id: knowledgePointId, count } })
+
 // ─── 学习报告 ─────────────────────────────────────
 
 export const getReport = () => api.get('/report/summary')

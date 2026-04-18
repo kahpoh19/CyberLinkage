@@ -1,12 +1,14 @@
 """学习路径推荐路由"""
 
-from typing import Dict, List
+import json as json_lib
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
+from models.exercise import Exercise
 from models.user import User, KnowledgeState
 from routers.auth import require_user
 from services.knowledge_tracing import bkt
@@ -20,6 +22,8 @@ class PathItem(BaseModel):
     id: str
     name: str
     category: str = ""
+    description: str = ""
+    chapter: Optional[int] = None
     mastery: float
     estimated_minutes: int = 30
     difficulty: int = 3
@@ -30,6 +34,25 @@ class PathResponse(BaseModel):
     path: List[PathItem]
     total_minutes: int
     weak_count: int
+
+
+class PathExerciseOut(BaseModel):
+    id: int
+    knowledge_point_id: str
+    question_text: str
+    options: Dict[str, str]
+    difficulty: int
+    explanation: Optional[str] = None
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def parse_options(cls, value: Any) -> Dict[str, str]:
+        if isinstance(value, str):
+            return json_lib.loads(value)
+        return value
+
+    class Config:
+        from_attributes = True
 
 
 @router.get("/recommend", response_model=PathResponse)
@@ -71,3 +94,26 @@ def recommend_path(
         total_minutes=total_minutes,
         weak_count=weak_count,
     )
+
+
+@router.get("/exercises", response_model=List[PathExerciseOut])
+def get_path_exercises(
+    knowledge_point_id: str,
+    count: int = 5,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    """
+    获取某个学习路径知识点对应的练习题。
+
+    这里按题目难度和录入顺序返回，避免每次刷新顺序完全跳变。
+    """
+    _ = user
+    exercises = (
+        db.query(Exercise)
+        .filter(Exercise.knowledge_point_id == knowledge_point_id)
+        .order_by(Exercise.difficulty.asc(), Exercise.id.asc())
+        .limit(max(1, min(count, 10)))
+        .all()
+    )
+    return exercises

@@ -92,6 +92,8 @@ class PathPlanner:
                 "id": kp,
                 "name": info.get("name", kp),
                 "category": info.get("category", ""),
+                "description": info.get("description", ""),
+                "chapter": info.get("chapter"),
                 "mastery": round(mastery, 3),
                 "estimated_minutes": info.get("estimated_minutes", 30),
                 "difficulty": info.get("difficulty", 3),
