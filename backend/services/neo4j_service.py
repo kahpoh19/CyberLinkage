@@ -41,13 +41,17 @@ class Neo4jService:
     def get_knowledge_graph(self, course: str) -> Dict:
         """获取完整知识图谱（节点 + 边）"""
         if self.available:
-            return self._get_graph_from_neo4j(course)
+            data = self._get_graph_from_neo4j(course)
+            if data.get("nodes"):
+                return data
         return self._get_graph_from_json(course)
 
     def get_prerequisites(self, kp_id: str) -> List[str]:
         """获取某知识点的所有前置知识点"""
         if self.available:
-            return self._get_prereqs_from_neo4j(kp_id)
+            prereqs = self._get_prereqs_from_neo4j(kp_id)
+            if prereqs:
+                return prereqs
         return self._get_prereqs_from_json(kp_id)
 
     def get_all_prerequisites(self, course: str) -> Dict[str, List[str]]:

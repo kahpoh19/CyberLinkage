@@ -28,6 +28,7 @@ class PathItem(BaseModel):
     estimated_minutes: int = 30
     difficulty: int = 3
     status: str  # "completed" | "in-progress" | "locked"
+    recommended: bool = False
 
 
 class PathResponse(BaseModel):

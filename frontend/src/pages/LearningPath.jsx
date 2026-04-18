@@ -37,7 +37,12 @@ export default function LearningPath() {
       const res = await getPath(currentSubject)
       const nextPath = res.data
       setPathData(nextPath)
-      setSelectedId(nextPath?.path?.[0]?.id || null)
+      setSelectedId(
+        nextPath?.path?.find((item) => item.recommended)?.id
+        || nextPath?.path?.find((item) => item.status !== 'completed')?.id
+        || nextPath?.path?.[0]?.id
+        || null
+      )
     } catch {
       // 未登录或无数据
     } finally {

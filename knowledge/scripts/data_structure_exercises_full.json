@@ -1,0 +1,509 @@
+[
+  {
+    "knowledge_point_id": "ds_complexity",
+    "question_text": "设 x=2，循环为 while(x<n/2) x=2*x; 该代码片段的时间复杂度是？",
+    "options": {
+      "A": "O(log n)",
+      "B": "O(n)",
+      "C": "O(n log n)",
+      "D": "O(n^2)"
+    },
+    "correct_answer": "A",
+    "difficulty": 1,
+    "explanation": "x 每次翻倍，循环次数等于 2 不断乘到 n/2 所需的次数，因此是对数级复杂度 O(log n)。"
+  },
+  {
+    "knowledge_point_id": "ds_complexity",
+    "question_text": "若某算法每次把问题规模缩小为原来的一半，直到规模为 1，则其典型时间复杂度最接近？",
+    "options": {
+      "A": "O(1)",
+      "B": "O(log n)",
+      "C": "O(n)",
+      "D": "O(n^2)"
+    },
+    "correct_answer": "B",
+    "difficulty": 1,
+    "explanation": "每次规模减半，对应递归深度或循环层数约为 log₂n，所以复杂度通常为 O(log n)。"
+  },
+  {
+    "knowledge_point_id": "ds_complexity",
+    "question_text": "对 n 个元素执行双重循环：外层 0..n-1，内层 0..i，整体复杂度是？",
+    "options": {
+      "A": "O(log n)",
+      "B": "O(n)",
+      "C": "O(n log n)",
+      "D": "O(n^2)"
+    },
+    "correct_answer": "D",
+    "difficulty": 2,
+    "explanation": "总执行次数约为 1+2+...+n，数量级是 n(n+1)/2，因此为 O(n^2)。"
+  },
+  {
+    "knowledge_point_id": "ds_complexity",
+    "question_text": "下列复杂度中，随着 n 增大增长最快的是？",
+    "options": {
+      "A": "O(log n)",
+      "B": "O(n)",
+      "C": "O(n log n)",
+      "D": "O(n^2)"
+    },
+    "correct_answer": "D",
+    "difficulty": 1,
+    "explanation": "在常见多项式和对数复杂度里，O(n^2) 的增长速度快于 O(n log n)、O(n) 和 O(log n)。"
+  },
+  {
+    "knowledge_point_id": "ds_seq_string",
+    "question_text": "在顺序字符串中，从位置 pos 开始删除 n 个字符；如果剩余字符不足 n 个，正确处理是？",
+    "options": {
+      "A": "直接报错并停止",
+      "B": "按实际剩余字符数删除",
+      "C": "从头开始重新删除",
+      "D": "删除操作无效"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "题目要求是按实际能删除的字符数处理，这也是顺序串删除中常见的边界保护策略。"
+  },
+  {
+    "knowledge_point_id": "ds_seq_string",
+    "question_text": "在字符数组中插入一个字符串，为了给新串腾出空间，通常需要先执行什么操作？",
+    "options": {
+      "A": "把前缀整体左移",
+      "B": "把后缀整体右移",
+      "C": "把数组清零",
+      "D": "把插入串反转"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "顺序存储插入的核心是先把 pos 之后的内容从后往前右移，再把新内容拷入空出来的位置。"
+  },
+  {
+    "knowledge_point_id": "ds_seq_string",
+    "question_text": "若题目规定文本编辑过程中总字符数不超过 512，则存储文本的字符数组至少应开多大？",
+    "options": {
+      "A": "512",
+      "B": "513",
+      "C": "514",
+      "D": "1024"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "除了最多 512 个有效字符，还需要额外 1 个位置存放字符串结束符 '\\0'。"
+  },
+  {
+    "knowledge_point_id": "ds_stack_basic",
+    "question_text": "栈（stack）的典型访问特性是？",
+    "options": {
+      "A": "先进先出",
+      "B": "后进先出",
+      "C": "随机访问",
+      "D": "按优先级访问"
+    },
+    "correct_answer": "B",
+    "difficulty": 1,
+    "explanation": "栈是 LIFO（Last In First Out）结构，后压入的元素先被弹出。"
+  },
+  {
+    "knowledge_point_id": "ds_stack_basic",
+    "question_text": "用数组实现顺序栈时，若 top 初始为 -1，则空栈判断通常写成？",
+    "options": {
+      "A": "top == 0",
+      "B": "top == 1",
+      "C": "top == -1",
+      "D": "top < -1"
+    },
+    "correct_answer": "C",
+    "difficulty": 1,
+    "explanation": "top 初始化为 -1 表示当前没有元素，因此 top == -1 是最常见的空栈判断。"
+  },
+  {
+    "knowledge_point_id": "ds_stack_basic",
+    "question_text": "顺序栈中执行 push 时，top 的更新与元素写入顺序通常是？",
+    "options": {
+      "A": "先写元素，再 top--",
+      "B": "先 top++，再写元素",
+      "C": "先 top--，再写元素",
+      "D": "先写元素，再 top=0"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "顺序栈常见写法是先把 top 增加到新栈顶位置，再把元素写入 stack[top]。"
+  },
+  {
+    "knowledge_point_id": "ds_stack_undo",
+    "question_text": "在“撤销编辑”问题中，为了撤销一次删除操作，最关键需要额外保存什么？",
+    "options": {
+      "A": "删除发生的时间",
+      "B": "被删除的原字符串内容",
+      "C": "当前文本总长度",
+      "D": "下一次操作类型"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "只知道删除了多少个字符还不够，undo 时需要把原内容插回去，所以必须保存被删除的字符串。"
+  },
+  {
+    "knowledge_point_id": "ds_stack_undo",
+    "question_text": "若一次操作为在 pos 位置插入字符串 str，那么其撤销操作的本质是？",
+    "options": {
+      "A": "从 pos 位置删除 strlen(str) 个字符",
+      "B": "把整个文本清空",
+      "C": "在 pos 前面再插入一次 str",
+      "D": "把 pos 之后全部左移 1 位"
+    },
+    "correct_answer": "A",
+    "difficulty": 2,
+    "explanation": "插入的逆操作就是删除同一位置、同样长度的内容。"
+  },
+  {
+    "knowledge_point_id": "ds_stack_undo",
+    "question_text": "如果当前已经没有任何历史操作可撤销，再执行 undo 时应如何处理？",
+    "options": {
+      "A": "删除整个文本",
+      "B": "随机撤销一步",
+      "C": "认为该撤销无效",
+      "D": "强制回到初始状态"
+    },
+    "correct_answer": "C",
+    "difficulty": 1,
+    "explanation": "题目规则明确说明：若已无操作可撤销，则再进行撤销操作无效。"
+  },
+  {
+    "knowledge_point_id": "ds_bracket_match",
+    "question_text": "进行代码括号匹配时，为什么要忽略字符串字面量和注释中的括号？",
+    "options": {
+      "A": "因为它们不占字符数",
+      "B": "因为这些括号不参与语法层级匹配",
+      "C": "因为括号在字符串里会自动配对",
+      "D": "因为注释不能出现括号"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "字符串和注释中的括号只是普通字符，不代表代码结构层级，若不忽略会导致误报。"
+  },
+  {
+    "knowledge_point_id": "ds_bracket_match",
+    "question_text": "当扫描到一个右括号 ')' 或 '}'，但此时栈为空，应该判定为？",
+    "options": {
+      "A": "正常结束",
+      "B": "缺失对应的左括号",
+      "C": "只需忽略当前括号",
+      "D": "说明栈实现有误"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "栈为空意味着之前没有压入与之匹配的左括号，因此这是典型的“多了右括号”错误。"
+  },
+  {
+    "knowledge_point_id": "ds_bracket_match",
+    "question_text": "若文件扫描结束后栈中仍有未弹出的左括号，说明什么？",
+    "options": {
+      "A": "所有括号已正确匹配",
+      "B": "缺失了对应的右括号",
+      "C": "只影响注释，不影响代码",
+      "D": "说明 top 应该初始化为 0"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "文件结束但栈未空，说明还有左括号没等到配对的右括号。"
+  },
+  {
+    "knowledge_point_id": "ds_infix_postfix",
+    "question_text": "中缀表达式 a+b*c 转换为后缀表达式后应为？",
+    "options": {
+      "A": "ab+c*",
+      "B": "abc*+",
+      "C": "a+bc*",
+      "D": "*+abc"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "乘法优先级高于加法，因此先输出 b c *，再与 a 做加法，结果为 abc*+。"
+  },
+  {
+    "knowledge_point_id": "ds_infix_postfix",
+    "question_text": "在中缀转后缀过程中读到右括号 ')' 时，正确处理是？",
+    "options": {
+      "A": "直接输出 ')'",
+      "B": "一直弹栈输出，直到遇到对应的 '('",
+      "C": "清空整个运算符栈",
+      "D": "忽略后继续扫描"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "右括号表示一个括号内子表达式结束，应把栈顶运算符依次弹出直到匹配到左括号。"
+  },
+  {
+    "knowledge_point_id": "ds_infix_postfix",
+    "question_text": "在给定实现里，运算符优先级从高到低排列正确的是？",
+    "options": {
+      "A": "^ > * / > + -",
+      "B": "+ - > * / > ^",
+      "C": "* / > ^ > + -",
+      "D": "^ > + - > * /"
+    },
+    "correct_answer": "A",
+    "difficulty": 2,
+    "explanation": "实现中 '^' 优先级最高，接着是 '*' 和 '/'，最后是 '+' 和 '-'。"
+  },
+  {
+    "knowledge_point_id": "ds_expression_tree",
+    "question_text": "根据后缀表达式建树时，若当前读到的是运算符，则正确的出栈顺序是？",
+    "options": {
+      "A": "先弹左子树，再弹右子树",
+      "B": "先弹右子树，再弹左子树",
+      "C": "只弹一个节点",
+      "D": "先创建根，再决定是否弹栈"
+    },
+    "correct_answer": "B",
+    "difficulty": 3,
+    "explanation": "后缀表达式中运算符作用于之前两个操作数，先弹出的是右操作数，再弹出的是左操作数。"
+  },
+  {
+    "knowledge_point_id": "ds_expression_tree",
+    "question_text": "后缀表达式 3 4 + 5 * 构建出的表达式树根节点应为？",
+    "options": {
+      "A": "+",
+      "B": "*",
+      "C": "3",
+      "D": "5"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "3 4 + 先形成子树，再与 5 进行乘法，因此最后一个运算符 '*' 成为整棵树的根。"
+  },
+  {
+    "knowledge_point_id": "ds_expression_tree",
+    "question_text": "表达式树求值函数中，对非数字节点通常采用什么策略？",
+    "options": {
+      "A": "返回 0",
+      "B": "只计算左子树",
+      "C": "递归求左右子树，再按当前运算符组合",
+      "D": "把当前运算符直接转成整数"
+    },
+    "correct_answer": "C",
+    "difficulty": 2,
+    "explanation": "表达式树求值是经典递归：先算左值、右值，再根据根运算符计算当前节点结果。"
+  },
+  {
+    "knowledge_point_id": "ds_expression_tree",
+    "question_text": "在表达式树中，叶子节点通常代表什么？",
+    "options": {
+      "A": "运算符",
+      "B": "操作数",
+      "C": "括号",
+      "D": "空指针"
+    },
+    "correct_answer": "B",
+    "difficulty": 1,
+    "explanation": "表达式树的叶子是数字、变量等操作数，内部节点则是运算符。"
+  },
+  {
+    "knowledge_point_id": "ds_tree_layout",
+    "question_text": "“登机口调整”问题中，把高流量登机口安排到更靠上的位置，主要是为了？",
+    "options": {
+      "A": "减少树的高度",
+      "B": "减少整体旅客到登机口的平均路径长度",
+      "C": "让所有叶子编号更小",
+      "D": "避免使用排序算法"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "高流量节点放在更浅层，会让更多旅客少经过分叉路口，从而降低整体路径成本。"
+  },
+  {
+    "knowledge_point_id": "ds_tree_layout",
+    "question_text": "在该题的编号规则中，编号小于 100 的节点表示？",
+    "options": {
+      "A": "树根",
+      "B": "分叉结点",
+      "C": "登机口叶子结点",
+      "D": "无效结点"
+    },
+    "correct_answer": "C",
+    "difficulty": 2,
+    "explanation": "题目约定：编号大于等于 100 的是分叉结点，小于 100 的是登机口叶子结点。"
+  },
+  {
+    "knowledge_point_id": "ds_tree_layout",
+    "question_text": "若要按“从上到下、从左到右”枚举树上的登机口位置，最直接的遍历思想是？",
+    "options": {
+      "A": "前序遍历",
+      "B": "中序遍历",
+      "C": "层次遍历",
+      "D": "后序遍历"
+    },
+    "correct_answer": "C",
+    "difficulty": 2,
+    "explanation": "按层、按从左到右访问节点，正是层次遍历（广度优先遍历）的典型顺序。"
+  },
+  {
+    "knowledge_point_id": "ds_queue_schedule",
+    "question_text": "在车厢编组题中，车厢允许的移动关系是哪一种？",
+    "options": {
+      "A": "A、B、C 三段之间任意直接移动",
+      "B": "只允许 A→B，不能回退",
+      "C": "可在 A↔B、A↔C 间移动，但 B 和 C 不能直接互相移动",
+      "D": "只能从 B 移到 C"
+    },
+    "correct_answer": "C",
+    "difficulty": 2,
+    "explanation": "题目明确限制：车厢只能依次从 A 移到 B 或 C，或从 B/C 回到 A，B 和 C 之间不能直接移动。"
+  },
+  {
+    "knowledge_point_id": "ds_queue_schedule",
+    "question_text": "根据题目规则，车厢编组的第一步是？",
+    "options": {
+      "A": "把所有车厢从 A 依次推进到 B",
+      "B": "把所有车厢从 A 依次推进到 C",
+      "C": "把 B 中车厢全部移回 A",
+      "D": "随机选择一节车厢移到 C"
+    },
+    "correct_answer": "A",
+    "difficulty": 2,
+    "explanation": "规则 1 明确指出：首先将 A 中所有车厢从顶开始依次推进至 B 中。"
+  },
+  {
+    "knowledge_point_id": "ds_queue_schedule",
+    "question_text": "从 B 中选取下一节目标车厢时，应优先找到哪一节？",
+    "options": {
+      "A": "目的地最近且离顶最近的车厢",
+      "B": "目的地最远且离顶最近的车厢",
+      "C": "编号最小的车厢",
+      "D": "当前位于 B 底部的车厢"
+    },
+    "correct_answer": "B",
+    "difficulty": 3,
+    "explanation": "题目要求找到发往地最远的车厢中离顶最近的一节，以便按目的地由远到近重新编组。"
+  },
+  {
+    "knowledge_point_id": "ds_sort_basic",
+    "question_text": "对 n 个互不相同元素执行选择排序时，寻找最小值所产生的比较次数总量为？",
+    "options": {
+      "A": "n",
+      "B": "n(n-1)/2",
+      "C": "n log n",
+      "D": "2n"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "选择排序每一趟都在线性扫描未排序部分，比较次数固定为 (n-1)+(n-2)+...+1。"
+  },
+  {
+    "knowledge_point_id": "ds_sort_basic",
+    "question_text": "冒泡排序中，若某一趟没有发生任何交换，意味着？",
+    "options": {
+      "A": "本趟无效，必须重来",
+      "B": "数组已经有序，可以提前结束",
+      "C": "需要改用选择排序",
+      "D": "只能说明首元素正确"
+    },
+    "correct_answer": "B",
+    "difficulty": 1,
+    "explanation": "没有交换表示所有相邻元素都满足顺序，数组已经整体有序。"
+  },
+  {
+    "knowledge_point_id": "ds_sort_basic",
+    "question_text": "对数组 {5,4,3,2,1} 做一趟冒泡排序后，数组应变为？",
+    "options": {
+      "A": "{1,2,3,4,5}",
+      "B": "{4,3,2,1,5}",
+      "C": "{5,3,4,2,1}",
+      "D": "{4,5,3,2,1}"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "第一趟冒泡会把当前最大值 5 一步步交换到最后，得到 {4,3,2,1,5}。"
+  },
+  {
+    "knowledge_point_id": "ds_sort_basic",
+    "question_text": "在题目给定的排序方式编号中，数字 2 表示哪种排序？",
+    "options": {
+      "A": "选择排序",
+      "B": "冒泡排序",
+      "C": "堆排序",
+      "D": "归并排序"
+    },
+    "correct_answer": "B",
+    "difficulty": 1,
+    "explanation": "题目说明中明确规定：1 是选择排序，2 是冒泡排序，3 是堆排序。"
+  },
+  {
+    "knowledge_point_id": "ds_heap_sort",
+    "question_text": "在 0 下标数组表示的堆中，结点 i 的左右孩子下标分别是？",
+    "options": {
+      "A": "2i 和 2i+1",
+      "B": "2i+1 和 2i+2",
+      "C": "i+1 和 i+2",
+      "D": "2i-1 和 2i"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "0 下标数组存堆时，左右孩子分别为 2i+1 和 2i+2。"
+  },
+  {
+    "knowledge_point_id": "ds_heap_sort",
+    "question_text": "在大根堆调整 adjust 过程中，若 temp < 较大的孩子结点值，则应？",
+    "options": {
+      "A": "立即停止调整",
+      "B": "交换或下沉 temp，继续向下调整",
+      "C": "把 temp 设为 0",
+      "D": "改用冒泡排序"
+    },
+    "correct_answer": "B",
+    "difficulty": 3,
+    "explanation": "若根小于较大孩子，说明不满足大根堆性质，需要把较大孩子上移，让 temp 继续向下寻找合适位置。"
+  },
+  {
+    "knowledge_point_id": "ds_heap_sort",
+    "question_text": "堆排序的典型时间复杂度是？",
+    "options": {
+      "A": "O(log n)",
+      "B": "O(n)",
+      "C": "O(n log n)",
+      "D": "O(n^2)"
+    },
+    "correct_answer": "C",
+    "difficulty": 2,
+    "explanation": "建堆后每次取堆顶并调整堆，整体复杂度通常为 O(n log n)。"
+  },
+  {
+    "knowledge_point_id": "ds_interval_merge",
+    "question_text": "执行区间合并前，最关键的预处理步骤通常是？",
+    "options": {
+      "A": "按区间长度排序",
+      "B": "按区间起点排序",
+      "C": "按区间终点倒序排序",
+      "D": "先删除所有短区间"
+    },
+    "correct_answer": "B",
+    "difficulty": 2,
+    "explanation": "只有先按起点排序，后续线性扫描时当前区间与下一个区间的关系才有明确顺序。"
+  },
+  {
+    "knowledge_point_id": "ds_interval_merge",
+    "question_text": "若当前已合并区间的结尾为 temp，下一个区间起点为 start，且 temp+1 == start，按题中规则应？",
+    "options": {
+      "A": "判定两区间连续，可以合并",
+      "B": "两区间必须保留分开",
+      "C": "只有长度相等时才能合并",
+      "D": "立即停止扫描"
+    },
+    "correct_answer": "A",
+    "difficulty": 2,
+    "explanation": "题目中的代码把“相邻或连续”的区间一起合并，因此 temp+1 == start 时可继续扩展当前区间。"
+  },
+  {
+    "knowledge_point_id": "ds_interval_merge",
+    "question_text": "在区间合并实现中，用 mark 记录当前位置的主要作用是？",
+    "options": {
+      "A": "表示当前应输出的合并基准区间位置",
+      "B": "记录区间总数",
+      "C": "记录最短区间长度",
+      "D": "统计比较次数"
+    },
+    "correct_answer": "A",
+    "difficulty": 3,
+    "explanation": "mark 指向当前保留下来的合并结果区间，后续可直接更新 array[mark].end。"
+  }
+]

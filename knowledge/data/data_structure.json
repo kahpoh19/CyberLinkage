@@ -1,0 +1,129 @@
+{
+  "course": "data_structure",
+  "name": "数据结构",
+  "nodes": [
+    {
+      "id": "ds_complexity",
+      "name": "算法复杂度基础",
+      "category": "基础",
+      "difficulty": 1,
+      "chapter": 1,
+      "description": "时间复杂度 O(1)/O(log n)/O(n)/O(n log n)/O(n^2)；结合循环倍增与比较次数分析算法效率。",
+      "estimated_minutes": 25
+    },
+    {
+      "id": "ds_seq_string",
+      "name": "顺序存储与字符串处理",
+      "category": "线性结构",
+      "difficulty": 2,
+      "chapter": 1,
+      "description": "字符数组、文本插入删除、删除越界处理、顺序存储中的整体搬移与容量控制。",
+      "estimated_minutes": 35
+    },
+    {
+      "id": "ds_stack_basic",
+      "name": "栈与顺序栈",
+      "category": "线性结构",
+      "difficulty": 2,
+      "chapter": 2,
+      "description": "栈的 LIFO 特性、top 指针、入栈出栈、空栈判断与顺序栈实现。",
+      "estimated_minutes": 35
+    },
+    {
+      "id": "ds_stack_undo",
+      "name": "栈应用：撤销编辑",
+      "category": "栈应用",
+      "difficulty": 3,
+      "chapter": 2,
+      "description": "利用栈保存插入/删除操作，实现多次 undo；删除操作需记录被删字符串以便恢复。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "ds_bracket_match",
+      "name": "栈应用：括号匹配",
+      "category": "栈应用",
+      "difficulty": 3,
+      "chapter": 2,
+      "description": "扫描代码时忽略注释和字符串，使用栈检测括号不匹配、缺失与错误嵌套。",
+      "estimated_minutes": 40
+    },
+    {
+      "id": "ds_infix_postfix",
+      "name": "栈应用：中缀转后缀",
+      "category": "栈应用",
+      "difficulty": 3,
+      "chapter": 2,
+      "description": "运算符优先级、括号处理、操作数输出规则，以及中缀表达式到后缀表达式的转换。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "ds_expression_tree",
+      "name": "表达式树构建与求值",
+      "category": "树",
+      "difficulty": 4,
+      "chapter": 3,
+      "description": "根据后缀表达式建树，理解左右子树出栈顺序，并递归完成表达式求值。",
+      "estimated_minutes": 50
+    },
+    {
+      "id": "ds_tree_layout",
+      "name": "树的层次遍历与布局优化",
+      "category": "树",
+      "difficulty": 4,
+      "chapter": 3,
+      "description": "按层从上到下、从左到右枚举叶子位置，把高流量节点映射到更浅层的位置以减少总体路径成本。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "ds_queue_schedule",
+      "name": "调度模拟：辅助轨道与缓存区",
+      "category": "线性结构应用",
+      "difficulty": 4,
+      "chapter": 4,
+      "description": "理解 A/B/C 段车厢调度的移动约束，掌握利用辅助区进行重排与恢复的策略设计。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "ds_sort_basic",
+      "name": "基础排序：选择与冒泡",
+      "category": "排序",
+      "difficulty": 2,
+      "chapter": 5,
+      "description": "选择排序与冒泡排序的过程、稳定性直觉、比较次数与提前结束条件。",
+      "estimated_minutes": 40
+    },
+    {
+      "id": "ds_heap_sort",
+      "name": "堆排序与堆调整",
+      "category": "排序",
+      "difficulty": 4,
+      "chapter": 5,
+      "description": "大根堆结构、孩子下标关系、adjust 过程中的根节点下沉，以及堆排序的复杂度。",
+      "estimated_minutes": 50
+    },
+    {
+      "id": "ds_interval_merge",
+      "name": "排序应用：区间合并",
+      "category": "排序应用",
+      "difficulty": 3,
+      "chapter": 5,
+      "description": "先按区间起点排序，再线性扫描合并连续或相邻区间，理解 mark 与当前 end 的维护。",
+      "estimated_minutes": 35
+    }
+  ],
+  "edges": [
+    { "from": "ds_complexity", "to": "ds_seq_string", "relation": "prerequisite" },
+    { "from": "ds_complexity", "to": "ds_stack_basic", "relation": "prerequisite" },
+    { "from": "ds_seq_string", "to": "ds_stack_undo", "relation": "prerequisite" },
+    { "from": "ds_stack_basic", "to": "ds_stack_undo", "relation": "prerequisite" },
+    { "from": "ds_stack_basic", "to": "ds_bracket_match", "relation": "prerequisite" },
+    { "from": "ds_stack_basic", "to": "ds_infix_postfix", "relation": "prerequisite" },
+    { "from": "ds_infix_postfix", "to": "ds_expression_tree", "relation": "prerequisite" },
+    { "from": "ds_expression_tree", "to": "ds_tree_layout", "relation": "prerequisite" },
+    { "from": "ds_stack_basic", "to": "ds_queue_schedule", "relation": "prerequisite" },
+    { "from": "ds_complexity", "to": "ds_sort_basic", "relation": "prerequisite" },
+    { "from": "ds_sort_basic", "to": "ds_heap_sort", "relation": "prerequisite" },
+    { "from": "ds_sort_basic", "to": "ds_interval_merge", "relation": "prerequisite" },
+    { "from": "ds_seq_string", "to": "ds_interval_merge", "relation": "prerequisite" }
+  ]
+}

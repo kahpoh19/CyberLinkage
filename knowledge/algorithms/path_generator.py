@@ -42,13 +42,17 @@ class PathGenerator:
         Returns:
             有序学习路径
         """
-        if not weak_points:
-            return []
-
         if mastery_map is None:
             mastery_map = {kp: m for kp, m in weak_points}
 
         nodes_info = {n["id"]: n for n in self.graph.get("nodes", [])}
+        all_nodes = [n["id"] for n in self.graph.get("nodes", [])]
+
+        if not all_nodes:
+            return []
+
+        for kp in all_nodes:
+            mastery_map.setdefault(kp, 0.3)
 
         # 构建前置关系
         prereqs: Dict[str, List[str]] = {}
@@ -57,41 +61,57 @@ class PathGenerator:
             prereqs.setdefault(edge["to"], []).append(edge["from"])
             successors.setdefault(edge["from"], []).append(edge["to"])
 
-        # 扩展：纳入未掌握的前置依赖
+        # 扩展：纳入未掌握的前置依赖，形成推荐学习子集。
         weak_ids = {kp for kp, _ in weak_points}
-        to_learn = set(weak_ids)
+        target_ids = set(weak_ids)
 
         queue = deque(weak_ids)
         while queue:
             kp = queue.popleft()
             for prereq in prereqs.get(kp, []):
-                if prereq not in to_learn and mastery_map.get(prereq, 0.3) < 0.7:
-                    to_learn.add(prereq)
+                if prereq not in target_ids and mastery_map.get(prereq, 0.3) < 0.7:
+                    target_ids.add(prereq)
                     queue.append(prereq)
 
-        # 拓扑排序
-        in_degree = {kp: 0 for kp in to_learn}
-        for kp in to_learn:
+        def prereqs_mastered(kp: str) -> bool:
+            return all(mastery_map.get(prereq, 0.3) >= 0.7 for prereq in prereqs.get(kp, []))
+
+        def build_status(kp: str, mastery: float) -> str:
+            if mastery >= 0.7:
+                return "completed"
+            if prereqs_mastered(kp):
+                return "in-progress"
+            return "locked"
+
+        def sort_key(kp: str):
+            mastery = mastery_map.get(kp, 0.3)
+            info = nodes_info.get(kp, {})
+            status = build_status(kp, mastery)
+            return (
+                0 if (kp in target_ids and status != "completed") else 1,
+                0 if status == "in-progress" else 1 if status == "locked" else 2,
+                mastery,
+                info.get("chapter") if info.get("chapter") is not None else 999,
+                info.get("difficulty", 3),
+                info.get("name", kp),
+            )
+
+        # 对整门课程做完整拓扑排序，推荐项优先但不删除已掌握节点。
+        in_degree = {kp: 0 for kp in all_nodes}
+        for kp in all_nodes:
             for prereq in prereqs.get(kp, []):
-                if prereq in to_learn:
+                if prereq in in_degree:
                     in_degree[kp] += 1
 
-        ready = deque(
-            sorted(
-                [kp for kp, d in in_degree.items() if d == 0],
-                key=lambda k: mastery_map.get(k, 0.3),
-            )
-        )
+        ready = deque(sorted([kp for kp, d in in_degree.items() if d == 0], key=sort_key))
 
         path = []
-        total_minutes = 0
 
         while ready:
             kp = ready.popleft()
             info = nodes_info.get(kp, {})
             mastery = mastery_map.get(kp, 0.3)
             est_min = info.get("estimated_minutes", 30)
-            total_minutes += est_min
 
             path.append({
                 "id": kp,
@@ -100,6 +120,8 @@ class PathGenerator:
                 "mastery": round(mastery, 3),
                 "estimated_minutes": est_min,
                 "difficulty": info.get("difficulty", 3),
+                "status": build_status(kp, mastery),
+                "recommended": kp in target_ids and mastery < 0.7,
             })
 
             # 释放后继
@@ -109,8 +131,8 @@ class PathGenerator:
                     in_degree[succ] -= 1
                     if in_degree[succ] == 0:
                         next_ready.append(succ)
-            next_ready.sort(key=lambda k: mastery_map.get(k, 0.3))
-            ready.extend(next_ready)
+            next_ready.sort(key=sort_key)
+            ready = deque(sorted([*ready, *next_ready], key=sort_key))
 
         return path
 

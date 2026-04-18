@@ -33,14 +33,18 @@ class PathPlanner:
         Returns:
             有序学习路径 [{"id", "name", "mastery", "estimated_minutes", "status"}, ...]
         """
-        if not weak_points:
-            return []
-
         if mastery_map is None:
             mastery_map = {kp_id: m for kp_id, m in weak_points}
 
         graph_data = neo4j_service.get_knowledge_graph(course)
         nodes_info = {n["id"]: n for n in graph_data.get("nodes", [])}
+        all_nodes = [n["id"] for n in graph_data.get("nodes", [])]
+
+        if not all_nodes:
+            return []
+
+        for kp in all_nodes:
+            mastery_map.setdefault(kp, 0.3)
 
         # 构建邻接表和入度表
         prereqs: Dict[str, List[str]] = {}  # kp -> [前置kp]
@@ -49,31 +53,50 @@ class PathPlanner:
             prereqs.setdefault(edge["to"], []).append(edge["from"])
             successors.setdefault(edge["from"], []).append(edge["to"])
 
-        # 收集所有需要学习的节点（薄弱点 + 未掌握的前置依赖）
+        # 记录学习重点（薄弱点 + 未掌握的前置依赖），用于排序与前端聚焦。
         weak_ids = {kp_id for kp_id, _ in weak_points}
-        to_learn = set(weak_ids)
+        target_ids = set(weak_ids)
 
-        # BFS 向上追溯前置依赖
+        # BFS 向上追溯未掌握的前置依赖
         queue = deque(weak_ids)
         while queue:
             kp = queue.popleft()
             for prereq in prereqs.get(kp, []):
-                if prereq not in to_learn and mastery_map.get(prereq, 0.3) < 0.7:
-                    to_learn.add(prereq)
+                if prereq not in target_ids and mastery_map.get(prereq, 0.3) < 0.7:
+                    target_ids.add(prereq)
                     queue.append(prereq)
 
-        # Kahn 拓扑排序
-        in_degree = {kp: 0 for kp in to_learn}
-        for kp in to_learn:
+        def prereqs_mastered(kp: str) -> bool:
+            return all(mastery_map.get(prereq, 0.3) >= 0.7 for prereq in prereqs.get(kp, []))
+
+        def build_status(kp: str, mastery: float) -> str:
+            if mastery >= 0.7:
+                return "completed"
+            if prereqs_mastered(kp):
+                return "in-progress"
+            return "locked"
+
+        def sort_key(kp: str):
+            mastery = mastery_map.get(kp, 0.3)
+            info = nodes_info.get(kp, {})
+            status = build_status(kp, mastery)
+            return (
+                0 if (kp in target_ids and status != "completed") else 1,
+                0 if status == "in-progress" else 1 if status == "locked" else 2,
+                mastery,
+                info.get("chapter") if info.get("chapter") is not None else 999,
+                info.get("difficulty", 3),
+                info.get("name", kp),
+            )
+
+        # Kahn 拓扑排序：对整门课程做完整路径排序，不再只返回薄弱点子集。
+        in_degree = {kp: 0 for kp in all_nodes}
+        for kp in all_nodes:
             for prereq in prereqs.get(kp, []):
-                if prereq in to_learn:
+                if prereq in in_degree:
                     in_degree[kp] += 1
 
-        # 起始节点（无前置依赖），按薄弱度排序
-        ready = sorted(
-            [kp for kp, deg in in_degree.items() if deg == 0],
-            key=lambda kp: mastery_map.get(kp, 0.3),
-        )
+        ready = sorted([kp for kp, deg in in_degree.items() if deg == 0], key=sort_key)
         ready = deque(ready)
 
         path = []
@@ -82,11 +105,7 @@ class PathPlanner:
             mastery = mastery_map.get(kp, 0.3)
             info = nodes_info.get(kp, {})
 
-            status = "locked"
-            if mastery >= 0.7:
-                status = "completed"
-            elif mastery >= 0.4:
-                status = "in-progress"
+            status = build_status(kp, mastery)
 
             path.append({
                 "id": kp,
@@ -98,6 +117,7 @@ class PathPlanner:
                 "estimated_minutes": info.get("estimated_minutes", 30),
                 "difficulty": info.get("difficulty", 3),
                 "status": status,
+                "recommended": kp in target_ids and status != "completed",
             })
 
             # 释放后继节点
@@ -108,9 +128,8 @@ class PathPlanner:
                     if in_degree[succ] == 0:
                         next_ready.append(succ)
 
-            # 同批次按薄弱度排序
-            next_ready.sort(key=lambda k: mastery_map.get(k, 0.3))
-            ready.extend(next_ready)
+            next_ready.sort(key=sort_key)
+            ready = deque(sorted([*ready, *next_ready], key=sort_key))
 
         return path
 
