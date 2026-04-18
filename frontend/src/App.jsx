@@ -1,6 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, message, Radio, Tag, Dropdown, Select } from 'antd'
+import {
+  Layout, Menu, Typography, Avatar, Button, Modal, Form, Input,
+  message, Radio, Tag, Dropdown, Select, Popconfirm, Tooltip,
+} from 'antd'
 import DashboardOutlined from '@ant-design/icons/es/icons/DashboardOutlined'
 import ExperimentOutlined from '@ant-design/icons/es/icons/ExperimentOutlined'
 import ApartmentOutlined from '@ant-design/icons/es/icons/ApartmentOutlined'
@@ -13,6 +16,9 @@ import BookOutlined from '@ant-design/icons/es/icons/BookOutlined'
 import ToolOutlined from '@ant-design/icons/es/icons/ToolOutlined'
 import FileTextOutlined from '@ant-design/icons/es/icons/FileTextOutlined'
 import ReadOutlined from '@ant-design/icons/es/icons/ReadOutlined'
+import PlusOutlined from '@ant-design/icons/es/icons/PlusOutlined'
+import DeleteOutlined from '@ant-design/icons/es/icons/DeleteOutlined'
+import WarningOutlined from '@ant-design/icons/es/icons/WarningOutlined'
 
 import Dashboard from './pages/Dashboard'
 import Diagnosis from './pages/Diagnosis'
@@ -21,15 +27,16 @@ import LearningPath from './pages/LearningPath'
 import Chat from './pages/Chat'
 import TeacherUpload from './pages/TeacherUpload'
 import StudentResources from './pages/StudentResources'
-import useUserStore, { SUBJECTS } from './store/userStore'
-import { login, register, getMe } from './api'
 import Sandbox from './pages/Sandbox'
 import Profile from './pages/Profile'
+import useUserStore from './store/userStore'
+import { getSubjectTheme, getSubjectTagStyle } from './utils/subjectTheme'
+import { login, register, getMe } from './api'
 import UserOutlined from '@ant-design/icons/es/icons/UserOutlined'
 import { getAvatarUrl, getDisplayName } from './utils/user'
 
 const { Sider, Content, Header } = Layout
-const { Title } = Typography
+const { Title, Text } = Typography
 const SIDER_WIDTH = 200
 const SIDER_COLLAPSED_WIDTH = 80
 
@@ -41,6 +48,7 @@ const menuItems = [
   { key: '/chat',               icon: <RobotOutlined />,      label: 'AI 答疑'  },
   { key: '/student-resources',  icon: <FileTextOutlined />,   label: '学生资料' },
   { key: '/teacher',            icon: <BookOutlined />,       label: '教师上传' },
+  // 实战工坊 — 仅机械原理科目下可见（在 visibleMenuItems 中过滤）
   { key: '/sandbox',            icon: <ToolOutlined />,       label: '实战工坊' },
   { key: '/profile',            icon: <UserOutlined />,       label: '个人中心' },
 ]
@@ -63,6 +71,25 @@ function getPageThemeKey(pathname) {
   return 'dashboard'
 }
 
+// ── 实战工坊路由守卫 ──────────────────────────────────────────────
+function SandboxRoute({ children }) {
+  const currentSubject = useUserStore(s => s.currentSubject)
+  if (currentSubject !== 'mechanics') {
+    return (
+      <div style={{ textAlign: 'center', marginTop: 120, padding: '0 24px' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔧</div>
+        <Title level={3}>实战工坊仅限机械原理学科</Title>
+        <Text type="secondary" style={{ fontSize: 15 }}>
+          请在顶部科目栏切换至「机械原理」后再进入实战工坊。
+        </Text>
+        <br /><br />
+        <Navigate to="/" replace />
+      </div>
+    )
+  }
+  return children
+}
+
 function TeacherOnlyRoute({ children }) {
   const { user, isAuthenticated } = useUserStore()
   if (isAuthenticated() && !user) {
@@ -71,6 +98,186 @@ function TeacherOnlyRoute({ children }) {
   return user?.role === 'teacher' ? children : <Navigate to="/" replace />
 }
 
+// ── 新增科目弹窗 ──────────────────────────────────────────────────
+function AddSubjectModal({ open, onClose, onAdd }) {
+  const [form] = Form.useForm()
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (values) => {
+    setLoading(true)
+    const result = onAdd({ id: values.subject_id, label: values.label })
+    setLoading(false)
+    if (result?.success) {
+      message.success(`科目「${values.label}」已添加`)
+      form.resetFields()
+      onClose()
+    } else {
+      message.error(result?.error || '添加失败')
+    }
+  }
+
+  return (
+    <Modal
+      title="➕ 新增学科"
+      open={open}
+      onCancel={() => { form.resetFields(); onClose() }}
+      footer={null}
+      destroyOnClose
+    >
+      <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 8 }}>
+        <Form.Item
+          name="label"
+          label="学科名称"
+          rules={[{ required: true, message: '请输入学科名称' }]}
+        >
+          <Input placeholder="例如：控制工程基础" />
+        </Form.Item>
+        <Form.Item
+          name="subject_id"
+          label="学科 ID（英文小写，用于系统标识）"
+          rules={[
+            { required: true, message: '请输入学科 ID' },
+            { pattern: /^[a-z0-9_]+$/, message: '只能使用英文小写字母、数字和下划线' },
+          ]}
+        >
+          <Input placeholder="例如：control_engineering" />
+        </Form.Item>
+        <Button type="primary" htmlType="submit" block loading={loading}>
+          确认添加
+        </Button>
+      </Form>
+    </Modal>
+  )
+}
+
+// ── 科目栏组件（带渐变色、增删） ──────────────────────────────────
+function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDark }) {
+  const [addModalOpen, setAddModalOpen] = useState(false)
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      flexWrap: 'wrap',
+      flex: 1,
+      minWidth: 0,
+    }}>
+      <ReadOutlined style={{
+        color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1',
+        fontSize: 15,
+        flexShrink: 0,
+        marginRight: 2,
+      }} />
+
+      {subjects.map((s, idx) => {
+        const isSelected = s.id === currentSubject
+        const theme = getSubjectTheme(s.id, idx)
+        const isBuiltin = s.builtin !== false  // builtin 默认视为 true
+
+        return (
+          <div key={s.id} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <button
+              onClick={() => onSelect(s.id)}
+              style={{
+                padding: '5px 14px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: isSelected ? 700 : 500,
+                cursor: 'pointer',
+                border: `1px solid ${theme.border}`,
+                transition: 'all 0.22s ease',
+                position: 'relative',
+                overflow: 'hidden',
+                // 渐变背景
+                ...(isSelected ? {
+                  background: theme.gradient,
+                  color: '#ffffff',
+                  boxShadow: `0 0 14px ${theme.glow}, 0 0 28px ${theme.glowSoft}`,
+                } : {
+                  background: isDark ? theme.glowSoft : `${theme.glowSoft}`,
+                  color: theme.primary,
+                }),
+                paddingRight: !isBuiltin ? '28px' : '14px',
+              }}
+            >
+              {s.label}
+            </button>
+
+            {/* 删除按钮（仅自定义科目显示） */}
+            {!isBuiltin && (
+              <Popconfirm
+                title="删除学科"
+                description={`确认删除「${s.label}」吗？`}
+                onConfirm={() => onRemove(s.id)}
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+              >
+                <button
+                  style={{
+                    position: 'absolute',
+                    right: 5,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: 'rgba(239,68,68,0.2)',
+                    color: '#f87171',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 10,
+                    padding: 0,
+                    zIndex: 1,
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  ×
+                </button>
+              </Popconfirm>
+            )}
+          </div>
+        )
+      })}
+
+      {/* 添加科目按钮 */}
+      <Tooltip title="新增学科">
+        <button
+          onClick={() => setAddModalOpen(true)}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            border: `1px dashed ${isDark ? 'rgba(255,255,255,0.25)' : 'rgba(99,102,241,0.4)'}`,
+            background: 'transparent',
+            color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 16,
+            flexShrink: 0,
+            transition: 'all 0.15s',
+          }}
+        >
+          +
+        </button>
+      </Tooltip>
+
+      <AddSubjectModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onAdd={onAdd}
+      />
+    </div>
+  )
+}
+
+// ── Auth Modal ────────────────────────────────────────────────────
 function AuthModal() {
   const { showAuthModal, closeAuthModal, login: storeLogin, setUser } = useUserStore()
   const [isRegister, setIsRegister] = useState(false)
@@ -135,6 +342,7 @@ function AuthModal() {
   )
 }
 
+// ── 主应用 ────────────────────────────────────────────────────────
 export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -143,6 +351,7 @@ export default function App() {
     theme, resolvedTheme, toggleTheme,
     discoMode, activateDisco, openAuthModal,
     currentSubject, setCurrentSubject,
+    subjects, addSubject, removeSubject,
   } = useUserStore()
 
   const [siderCollapsed, setSiderCollapsed] = useState(
@@ -156,10 +365,12 @@ export default function App() {
   const hasToken = isAuthenticated()
   const isTeacher = user?.role === 'teacher'
 
+  // 实战工坊仅机械原理可见
   const visibleMenuItems = menuItems.filter((item) => {
     if (item.key === '/teacher')           return isTeacher
     if (item.key === '/student-resources') return !isTeacher
     if (item.key === '/profile')           return hasToken
+    if (item.key === '/sandbox')           return currentSubject === 'mechanics'
     return true
   })
 
@@ -204,33 +415,28 @@ export default function App() {
   }
   const handleLogout = () => { logout(); navigate('/') }
 
-  const currentThemeLabel = isDark ? 'Dark' : 'Light'
-  const nextThemeLabel = isDark ? 'Light' : 'Dark'
+  // 删除科目时同步跳转
+  const handleRemoveSubject = useCallback((subjectId) => {
+    const result = removeSubject(subjectId)
+    if (result.success) {
+      message.success('科目已删除')
+      if (location.pathname === '/sandbox' && subjectId === 'mechanics') {
+        navigate('/')
+      }
+    } else {
+      message.error(result.error || '删除失败')
+    }
+  }, [removeSubject, location.pathname, navigate])
+
   const themeButtonTitle = discoMode
     ? 'DISCO!'
-    : `${currentThemeLabel}，点击切换到 ${nextThemeLabel}，长按开启 DISCO MODE`
+    : `${isDark ? 'Dark' : 'Light'}，点击切换，长按开启 DISCO MODE`
   const themeButtonIcon = discoMode
     ? <span style={{ fontSize: 18 }}>🪩</span>
     : isDark
       ? <MoonOutlined style={{ fontSize: 18, color: '#f0f0f0' }} />
       : <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
-  const headerIconButtonStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 32,
-    height: 32,
-    lineHeight: 1,
-    padding: 0,
-    borderRadius: '50%',
-  }
-  const headerActionsStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-    lineHeight: 1,
-  }
+
   const siderWidth = siderCollapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH
 
   const userMenuItems = [
@@ -250,8 +456,8 @@ export default function App() {
     { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
   ]
 
-  const subjectOptions = SUBJECTS.map(s => ({ value: s.id, label: s.label }))
   const pageThemeKey = getPageThemeKey(location.pathname)
+  const currentTheme = getSubjectTheme(currentSubject)
 
   return (
     <Layout
@@ -297,26 +503,24 @@ export default function App() {
           25% { transform: scale(1.3) rotate(-15deg); }
           75% { transform: scale(1.3) rotate(15deg); }
         }
+        @keyframes subjectGlow {
+          0%,100% { box-shadow: 0 0 10px ${currentTheme.glow}, 0 0 20px ${currentTheme.glowSoft}; }
+          50%      { box-shadow: 0 0 22px ${currentTheme.glow}, 0 0 44px ${currentTheme.glowSoft}; }
+        }
+        @keyframes flowLight {
+          0%   { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
         .disco-btn-icon { animation: ${discoMode ? 'discoPulse 0.4s ease-in-out infinite' : 'none'}; display: inline-flex; }
-
-        .subject-selector .ant-select-selector {
-          background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(22,119,255,0.04)'} !important;
-          border: 1px solid ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(22,119,255,0.25)'} !important;
-          border-radius: 8px !important;
-          color: ${isDark ? '#e2e8f0' : '#1e293b'} !important;
-          transition: border-color 0.2s, background 0.2s !important;
+        /* 选中科目标签呼吸灯 */
+        .subject-btn-selected {
+          animation: subjectGlow 1.8s ease-in-out infinite !important;
         }
-        .subject-selector .ant-select-selector:hover,
-        .subject-selector.ant-select-focused .ant-select-selector {
-          border-color: #1677ff !important;
-          background: ${isDark ? 'rgba(22,119,255,0.12)' : 'rgba(22,119,255,0.08)'} !important;
+        /* 科目标签悬停流光 */
+        .subject-btn:hover:not(.subject-btn-selected) {
+          filter: brightness(1.18);
+          transform: translateY(-1px);
         }
-        .subject-selector .ant-select-selection-item {
-          color: ${isDark ? '#e2e8f0' : '#1e293b'} !important;
-          font-weight: 500;
-          font-size: 13px;
-        }
-        .subject-selector .ant-select-arrow { color: ${isDark ? 'rgba(255,255,255,0.45)' : '#1677ff'} !important; }
       `}</style>
 
       <Sider
@@ -347,43 +551,42 @@ export default function App() {
         className="cy-main-layout"
         style={{ marginLeft: siderWidth, minHeight: '100vh', transition: 'margin-left 0.2s' }}
       >
-        <Header className="cy-app-header" style={{
-          background: 'var(--cy-header-bg)',
-          padding: '0 24px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: '1px solid var(--cy-header-border)',
-          position: 'relative',
-          zIndex: 10,
-          height: 'auto',
-          minHeight: 64,
-          lineHeight: 1,
-        }}>
-          {/* Left: title + subject selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
-            <Title level={5} style={{ margin: 0, lineHeight: 1.3, whiteSpace: 'nowrap' }}>
-              基于知识图谱的个性化学习伴侣
-            </Title>
+        <Header
+          className="cy-app-header"
+          style={{
+            background: 'var(--cy-header-bg)',
+            padding: '0 16px 0 20px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 10,
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: '1px solid var(--cy-header-border)',
+            position: 'relative',
+            zIndex: 10,
+            height: 'auto',
+            minHeight: 64,
+            lineHeight: 1,
+          }}
+        >
+          {/* ── 科目栏（带渐变色 + 增删） ───────────────────────── */}
+          <SubjectBar
+            subjects={subjects}
+            currentSubject={currentSubject}
+            onSelect={(id) => {
+              setCurrentSubject(id)
+              // 如果当前在实战工坊但切换到非机械原理，重定向
+              if (location.pathname === '/sandbox' && id !== 'mechanics') {
+                navigate('/')
+                message.info('实战工坊功能目前仅针对机械原理学科开放，已自动返回首页。')
+              }
+            }}
+            onAdd={addSubject}
+            onRemove={handleRemoveSubject}
+            isDark={isDark}
+          />
 
-            {/* Global subject selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ReadOutlined style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#1677ff', fontSize: 14, flexShrink: 0 }} />
-              <Select
-                className="subject-selector"
-                value={currentSubject}
-                onChange={setCurrentSubject}
-                options={subjectOptions}
-                style={{ width: 168 }}
-                size="small"
-                popupMatchSelectWidth={false}
-              />
-            </div>
-          </div>
-
-          {/* Right: theme toggle + user */}
+          {/* ── 右侧操作区 ─────────────────────────────────────── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <Button
               type="text"
@@ -455,7 +658,15 @@ export default function App() {
               path="/teacher"
               element={<TeacherOnlyRoute><TeacherUpload /></TeacherOnlyRoute>}
             />
-            <Route path="/sandbox" element={<Sandbox />} />
+            {/* 实战工坊 — 带科目守卫 */}
+            <Route
+              path="/sandbox"
+              element={
+                <SandboxRoute>
+                  <Sandbox />
+                </SandboxRoute>
+              }
+            />
           </Routes>
         </Content>
       </Layout>
