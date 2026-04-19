@@ -10,9 +10,11 @@
 import React, {
   useState, useRef, useCallback, useEffect, useMemo,
 } from 'react'
-import { DatePicker, Tooltip, Select } from 'antd'
+import { DatePicker, Tooltip, Select, message } from 'antd'
 import dayjs from 'dayjs'
+import { generateQuestionBank, getGraph } from '../api'
 import useTeacherStore from '../store/teacherStore'
+import useUserStore from '../store/userStore'
 
 // ── Subject catalogue ─────────────────────────────────────────────
 export const SUBJECTS = [
@@ -94,6 +96,24 @@ const disabledReleaseTime = current => {
 
 const toFutureTimestamp = val =>
   val && val.valueOf() > Date.now() ? val.valueOf() : null
+
+const clampQuestionCount = value => {
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed)) return 3
+  return Math.min(10, Math.max(1, parsed))
+}
+
+const getApiErrorMessage = error =>
+  error?.response?.data?.detail
+  || error?.response?.data?.message
+  || error?.message
+  || '请求失败，请稍后重试'
+
+function resolvePreferredSubjectId(subjects, currentSubject) {
+  if (subjects.some(subject => subject.id === currentSubject)) return currentSubject
+  if (subjects.some(subject => subject.id === 'c_language')) return 'c_language'
+  return subjects[0]?.id || 'c_language'
+}
 
 // ── Blob helpers ──────────────────────────────────────────────────
 function openBlob(url, name) {
@@ -1189,6 +1209,477 @@ function EmptyState({ subject }) {
   )
 }
 
+function GenerateButton({ onClick, disabled, busy, accent, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || busy}
+      style={{
+        minWidth: 144,
+        height: 40,
+        padding: '0 16px',
+        borderRadius: 12,
+        border: `1px solid ${accent}`,
+        background: busy ? `${accent}22` : `${accent}14`,
+        color: disabled ? 'var(--t-text-sub)' : '#f8fafc',
+        cursor: disabled || busy ? 'not-allowed' : 'pointer',
+        fontSize: 13,
+        fontWeight: 600,
+        boxShadow: busy ? `0 0 18px ${accent}33` : 'none',
+        opacity: disabled ? 0.55 : 1,
+        transition: 'all 0.18s ease',
+      }}
+    >
+      {busy ? '处理中...' : children}
+    </button>
+  )
+}
+
+function QuestionBankSummary({ result, selectedCount, usingAllKnowledgePoints }) {
+  if (!result) return null
+
+  const chips = [
+    { label: '已生成', value: `${result.generated_count} 题`, color: '#22c55e' },
+    { label: '已入库', value: `${result.persisted_count} 题`, color: '#38bdf8' },
+    { label: '已替换', value: `${result.replaced_count} 题`, color: '#f59e0b' },
+    {
+      label: '范围',
+      value: usingAllKnowledgePoints
+        ? `全科目 ${result.knowledge_points.length} 个知识点`
+        : `${selectedCount || result.knowledge_points.length} 个知识点`,
+      color: '#c084fc',
+    },
+  ]
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+      gap: 10,
+      marginBottom: 16,
+    }}>
+      {chips.map(chip => (
+        <div
+          key={chip.label}
+          style={{
+            padding: '10px 12px',
+            borderRadius: 12,
+            border: `0.5px solid ${chip.color}55`,
+            background: `${chip.color}12`,
+          }}
+        >
+          <div style={{ fontSize: 11, color: 'var(--t-text-sub)', marginBottom: 4 }}>{chip.label}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-text)' }}>{chip.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function QuestionPreviewCard({ item, index }) {
+  return (
+    <div style={{
+      padding: '14px 16px',
+      borderRadius: 14,
+      border: '0.5px solid var(--t-border)',
+      background: 'var(--t-row)',
+    }}>
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignItems: 'center',
+        marginBottom: 10,
+      }}>
+        <span style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: '#c084fc',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+        }}>
+          第 {index + 1} 题
+        </span>
+        <span style={{
+          padding: '2px 8px',
+          borderRadius: 999,
+          fontSize: 11,
+          color: 'var(--t-text-sub)',
+          background: 'rgba(56,189,248,0.12)',
+          border: '0.5px solid rgba(56,189,248,0.28)',
+        }}>
+          {item.knowledge_point_id}
+        </span>
+        <span style={{
+          padding: '2px 8px',
+          borderRadius: 999,
+          fontSize: 11,
+          color: 'var(--t-text-sub)',
+          background: 'rgba(245,158,11,0.12)',
+          border: '0.5px solid rgba(245,158,11,0.28)',
+        }}>
+          难度 {item.difficulty}
+        </span>
+      </div>
+
+      <div style={{
+        fontSize: 14,
+        fontWeight: 600,
+        lineHeight: 1.65,
+        color: 'var(--t-text)',
+        whiteSpace: 'pre-wrap',
+        marginBottom: 12,
+      }}>
+        {item.question_text}
+      </div>
+
+      <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+        {Object.entries(item.options || {}).map(([key, value]) => {
+          const isAnswer = key === item.correct_answer
+          return (
+            <div
+              key={key}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 10,
+                border: isAnswer
+                  ? '0.5px solid rgba(34,197,94,0.40)'
+                  : '0.5px solid var(--t-border)',
+                background: isAnswer
+                  ? 'rgba(34,197,94,0.10)'
+                  : 'rgba(255,255,255,0.02)',
+                color: 'var(--t-text)',
+                fontSize: 13,
+              }}
+            >
+              <strong style={{ color: isAnswer ? '#22c55e' : 'var(--t-text-sub)' }}>{key}.</strong>{' '}
+              {value}
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{
+        padding: '10px 12px',
+        borderRadius: 10,
+        background: 'rgba(192,132,252,0.10)',
+        border: '0.5px solid rgba(192,132,252,0.22)',
+        fontSize: 12,
+        lineHeight: 1.7,
+        color: 'var(--t-text-sub)',
+      }}>
+        <strong style={{ color: '#c084fc' }}>解析：</strong>
+        {item.explanation || '暂无解析'}
+      </div>
+    </div>
+  )
+}
+
+function QuestionBankPanel({
+  subjects,
+  currentSubject,
+}) {
+  const [subjectId, setSubjectId] = useState(() => resolvePreferredSubjectId(subjects, currentSubject))
+  const [knowledgePoints, setKnowledgePoints] = useState([])
+  const [selectedKnowledgePointIds, setSelectedKnowledgePointIds] = useState([])
+  const [useAllKnowledgePoints, setUseAllKnowledgePoints] = useState(false)
+  const [questionsPerPoint, setQuestionsPerPoint] = useState(3)
+  const [replaceExisting, setReplaceExisting] = useState(true)
+  const [graphLoading, setGraphLoading] = useState(false)
+  const [graphError, setGraphError] = useState('')
+  const [requestState, setRequestState] = useState('')
+  const [result, setResult] = useState(null)
+
+  useEffect(() => {
+    if (!subjects.some(subject => subject.id === subjectId)) {
+      setSubjectId(resolvePreferredSubjectId(subjects, currentSubject))
+    }
+  }, [subjects, currentSubject, subjectId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadGraph = async () => {
+      setGraphLoading(true)
+      setGraphError('')
+
+      try {
+        const response = await getGraph(subjectId)
+        if (cancelled) return
+
+        const nodes = [...(response.data?.nodes || [])].sort((a, b) => (
+          (a.chapter || 0) - (b.chapter || 0)
+          || (a.difficulty || 0) - (b.difficulty || 0)
+          || String(a.name || a.id).localeCompare(String(b.name || b.id), 'zh-CN')
+        ))
+
+        setKnowledgePoints(nodes)
+        setSelectedKnowledgePointIds(prev => prev.filter(id => nodes.some(node => node.id === id)))
+        setResult(null)
+
+        if (!nodes.length) {
+          setGraphError('当前科目还没有知识图谱数据，暂时不能直接生成题库。')
+        }
+      } catch (error) {
+        if (cancelled) return
+        setKnowledgePoints([])
+        setSelectedKnowledgePointIds([])
+        setResult(null)
+        setGraphError(getApiErrorMessage(error))
+      } finally {
+        if (!cancelled) setGraphLoading(false)
+      }
+    }
+
+    if (subjectId) loadGraph()
+
+    return () => {
+      cancelled = true
+    }
+  }, [subjectId])
+
+  const knowledgePointOptions = useMemo(() => (
+    knowledgePoints.map(node => ({
+      value: node.id,
+      label: `第 ${node.chapter || 0} 章 · ${node.name || node.id} (${node.id})`,
+    }))
+  ), [knowledgePoints])
+
+  const selectedCount = useAllKnowledgePoints
+    ? knowledgePoints.length
+    : selectedKnowledgePointIds.length
+
+  const canSubmit = !!subjectId
+    && knowledgePoints.length > 0
+    && (useAllKnowledgePoints || selectedKnowledgePointIds.length > 0)
+    && !graphLoading
+
+  const runGeneration = useCallback(async (persist) => {
+    if (!canSubmit) {
+      message.warning(
+        graphLoading
+          ? '知识点还在加载中，请稍等一下'
+          : '请先选择至少一个知识点，或勾选“使用该科目全部知识点”'
+      )
+      return
+    }
+
+    setRequestState(persist ? 'persist' : 'preview')
+    try {
+      const response = await generateQuestionBank({
+        subject_id: subjectId,
+        knowledge_point_ids: useAllKnowledgePoints ? [] : selectedKnowledgePointIds,
+        questions_per_point: questionsPerPoint,
+        persist,
+        replace_existing: replaceExisting,
+      })
+
+      setResult(response.data)
+      message.success(
+        persist
+          ? `题库已更新，成功写入 ${response.data.persisted_count} 道题`
+          : `已生成 ${response.data.generated_count} 道题预览`
+      )
+    } catch (error) {
+      message.error(getApiErrorMessage(error))
+    } finally {
+      setRequestState('')
+    }
+  }, [
+    canSubmit,
+    graphLoading,
+    questionsPerPoint,
+    replaceExisting,
+    selectedKnowledgePointIds,
+    subjectId,
+    useAllKnowledgePoints,
+  ])
+
+  return (
+    <Card accent="rgba(16,185,129,0.18)" mb={20}>
+      <SectionLabel>AI 生成题库</SectionLabel>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gap: 18,
+        marginBottom: 18,
+      }}>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
+            目标科目
+          </label>
+          <Select
+            value={subjectId}
+            onChange={value => setSubjectId(value)}
+            options={subjects.map(subject => ({ value: subject.id, label: subject.label }))}
+            style={{ width: '100%' }}
+          />
+          <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: '8px 0 0', lineHeight: 1.6 }}>
+            题目会根据该科目的知识图谱逐个知识点生成。当前只对已配置知识图谱的科目可用。
+          </p>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
+            每个知识点题量
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="10"
+            value={questionsPerPoint}
+            onChange={event => setQuestionsPerPoint(clampQuestionCount(event.target.value))}
+            style={{
+              width: '100%',
+              height: 40,
+              borderRadius: 10,
+              border: '0.5px solid var(--t-border-acc)',
+              background: 'var(--t-input-bg)',
+              color: 'var(--t-text)',
+              padding: '0 12px',
+              boxSizing: 'border-box',
+            }}
+          />
+          <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: '8px 0 0', lineHeight: 1.6 }}>
+            建议先从 2 到 3 题开始，小批量看效果，再决定是否整门课批量生成。
+          </p>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 14,
+        alignItems: 'center',
+        marginBottom: 16,
+      }}>
+        <label style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 13,
+          color: 'var(--t-text)',
+        }}>
+          <input
+            type="checkbox"
+            checked={useAllKnowledgePoints}
+            onChange={event => setUseAllKnowledgePoints(event.target.checked)}
+          />
+          使用该科目全部知识点
+        </label>
+
+        <label style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 13,
+          color: 'var(--t-text)',
+        }}>
+          <input
+            type="checkbox"
+            checked={replaceExisting}
+            onChange={event => setReplaceExisting(event.target.checked)}
+          />
+          替换同知识点旧题
+        </label>
+
+        <span style={{
+          fontSize: 12,
+          color: selectedCount > 0 ? '#34d399' : 'var(--t-text-sub)',
+        }}>
+          当前将处理 {selectedCount || 0} 个知识点
+        </span>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
+          指定知识点
+        </label>
+        <Select
+          mode="multiple"
+          allowClear
+          disabled={useAllKnowledgePoints || graphLoading || !knowledgePoints.length}
+          value={selectedKnowledgePointIds}
+          onChange={setSelectedKnowledgePointIds}
+          options={knowledgePointOptions}
+          placeholder={
+            graphLoading
+              ? '知识图谱加载中...'
+              : useAllKnowledgePoints
+                ? '已切换为全知识点模式'
+                : '请选择一个或多个知识点'
+          }
+          maxTagCount="responsive"
+          style={{ width: '100%' }}
+        />
+        {graphError && (
+          <p style={{ fontSize: 12, color: '#f87171', margin: '8px 0 0', lineHeight: 1.6 }}>
+            {graphError}
+          </p>
+        )}
+        {!graphError && !graphLoading && !!knowledgePoints.length && (
+          <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: '8px 0 0', lineHeight: 1.6 }}>
+            当前科目共 {knowledgePoints.length} 个知识点。未勾选“全部知识点”时，需要手动选择至少一个知识点才能生成。
+          </p>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: result ? 18 : 0 }}>
+        <GenerateButton
+          onClick={() => runGeneration(false)}
+          disabled={!canSubmit}
+          busy={requestState === 'preview'}
+          accent="#38bdf8"
+        >
+          预览生成
+        </GenerateButton>
+        <GenerateButton
+          onClick={() => runGeneration(true)}
+          disabled={!canSubmit}
+          busy={requestState === 'persist'}
+          accent="#22c55e"
+        >
+          生成并入库
+        </GenerateButton>
+      </div>
+
+      {result && (
+        <div style={{ marginTop: 18 }}>
+          <QuestionBankSummary
+            result={result}
+            selectedCount={selectedCount}
+            usingAllKnowledgePoints={useAllKnowledgePoints}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-text)' }}>
+                最近一次生成结果
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--t-text-sub)', marginTop: 4 }}>
+                {result.subject_name} · 共返回 {result.questions.length} 道题
+              </div>
+            </div>
+            {result.questions.length > 6 && (
+              <span style={{ fontSize: 12, color: 'var(--t-text-sub)' }}>
+                仅预览前 6 道
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gap: 12 }}>
+            {result.questions.slice(0, 6).map((item, index) => (
+              <QuestionPreviewCard key={`${item.knowledge_point_id}-${index}`} item={item} index={index} />
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════
 // Main page component
 // ════════════════════════════════════════════════════════════════
@@ -1198,13 +1689,37 @@ export default function TeacherUpload() {
   const updateFile   = useTeacherStore(s => s.updateFile)
   const removeFile   = useTeacherStore(s => s.removeFile)
   const registerBlob = useTeacherStore(s => s.registerBlob)
+  const subjects     = useUserStore(s => s.subjects)
+  const currentSubject = useUserStore(s => s.currentSubject)
+
+  const aiSubjects = useMemo(
+    () => subjects.filter(subject => subject.id !== 'all'),
+    [subjects],
+  )
+  const uploadSubjects = useMemo(
+    () => SUBJECTS.filter(subject => subject.id !== 'all'),
+    [],
+  )
+  const preferredSubjectId = useMemo(
+    () => resolvePreferredSubjectId(aiSubjects, currentSubject),
+    [aiSubjects, currentSubject],
+  )
+  const preferredUploadSubjectId = useMemo(
+    () => resolvePreferredSubjectId(uploadSubjects, currentSubject),
+    [currentSubject, uploadSubjects],
+  )
 
   const [activeTab,         setActiveTab]         = useState('all')
-  const [uploadSubject,     setUploadSubject]      = useState('c_language')
+  const [uploadSubject,     setUploadSubject]      = useState(preferredUploadSubjectId)
   const [defaultVisible,    setDefaultVisible]     = useState(true)
   const [defaultReleaseAt,  setDefaultReleaseAt]   = useState(null)
 
   useEffect(() => { injectCSS() })
+  useEffect(() => {
+    if (!SUBJECTS.some(subject => subject.id === uploadSubject) && preferredUploadSubjectId) {
+      setUploadSubject(preferredUploadSubjectId)
+    }
+  }, [preferredUploadSubjectId, uploadSubject])
 
   const subjectCounts = useMemo(() => {
     const counts = {}
@@ -1291,6 +1806,11 @@ export default function TeacherUpload() {
           onFiles={(files, subject) => onFiles(files, subject, defaultVisible, defaultReleaseAt)}
         />
       </Card>
+
+      <QuestionBankPanel
+        subjects={aiSubjects}
+        currentSubject={currentSubject}
+      />
 
       {/* Subject filter tabs */}
       <SubjectTabs active={activeTab} onChange={setActiveTab} counts={subjectCounts} />
