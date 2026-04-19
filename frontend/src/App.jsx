@@ -41,16 +41,15 @@ const SIDER_WIDTH = 200
 const SIDER_COLLAPSED_WIDTH = 80
 
 const menuItems = [
-  { key: '/',                   icon: <DashboardOutlined />,  label: '仪表盘'  },
-  { key: '/diagnosis',          icon: <ExperimentOutlined />, label: '诊断测评' },
-  { key: '/graph',              icon: <ApartmentOutlined />,  label: '知识图谱' },
-  { key: '/path',               icon: <NodeIndexOutlined />,  label: '学习路径' },
-  { key: '/chat',               icon: <RobotOutlined />,      label: 'AI 答疑'  },
-  { key: '/student-resources',  icon: <FileTextOutlined />,   label: '学生资料' },
-  { key: '/teacher',            icon: <BookOutlined />,       label: '教师上传' },
-  // 实战工坊 — 仅机械原理科目下可见（在 visibleMenuItems 中过滤）
-  { key: '/sandbox',            icon: <ToolOutlined />,       label: '实战工坊' },
-  { key: '/profile',            icon: <UserOutlined />,       label: '个人中心' },
+  { key: '/', icon: <DashboardOutlined style={{ background: 'linear-gradient(135deg,#60a5fa,#a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />, label: '仪表盘' },
+  { key: '/diagnosis', icon: <ExperimentOutlined />, label: '诊断测评' },
+  { key: '/graph', icon: <ApartmentOutlined style={{ background: 'linear-gradient(135deg,#34d399,#22d3ee)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />, label: '知识图谱' },
+  { key: '/path', icon: <NodeIndexOutlined />, label: '学习路径' },
+  { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
+  { key: '/student-resources', icon: <FileTextOutlined style={{ background: 'linear-gradient(135deg,#fb923c,#f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />, label: '学生资料' },
+  { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
+  { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
+  { key: '/profile', icon: <UserOutlined />, label: '个人中心' },
 ]
 
 const DISCO_COLORS = [
@@ -153,34 +152,29 @@ function AddSubjectModal({ open, onClose, onAdd }) {
 // ── 科目栏组件（带渐变色、增删） ──────────────────────────────────
 function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDark }) {
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const [hoveredId, setHoveredId] = useState(null)
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      flexWrap: 'wrap',
-      flex: 1,
-      minWidth: 0,
-    }}>
-      <ReadOutlined style={{
-        color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1',
-        fontSize: 15,
-        flexShrink: 0,
-        marginRight: 2,
-      }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+      <ReadOutlined style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1', fontSize: 15, flexShrink: 0, marginRight: 2 }} />
 
       {subjects.map((s, idx) => {
         const isSelected = s.id === currentSubject
         const theme = getSubjectTheme(s.id, idx)
-        const isBuiltin = s.builtin !== false  // builtin 默认视为 true
+        const isHovered = hoveredId === s.id
 
         return (
-          <div key={s.id} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+          <div
+            key={s.id}
+            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+            onMouseEnter={() => setHoveredId(s.id)}
+            onMouseLeave={() => setHoveredId(null)}
+          >
             <button
               onClick={() => onSelect(s.id)}
               style={{
                 padding: '5px 14px',
+                paddingRight: '28px',
                 borderRadius: 20,
                 fontSize: 12,
                 fontWeight: isSelected ? 700 : 500,
@@ -189,90 +183,84 @@ function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDar
                 transition: 'all 0.22s ease',
                 position: 'relative',
                 overflow: 'hidden',
-                // 渐变背景
                 ...(isSelected ? {
                   background: theme.gradient,
                   color: '#ffffff',
                   boxShadow: `0 0 14px ${theme.glow}, 0 0 28px ${theme.glowSoft}`,
                 } : {
-                  background: isDark ? theme.glowSoft : `${theme.glowSoft}`,
+                  background: isDark ? theme.glowSoft : theme.glowSoft,
                   color: theme.primary,
                 }),
-                paddingRight: !isBuiltin ? '28px' : '14px',
               }}
             >
               {s.label}
             </button>
 
-            {/* 删除按钮（仅自定义科目显示） */}
-            {!isBuiltin && (
-              <Popconfirm
-                title="删除学科"
-                description={`确认删除「${s.label}」吗？`}
-                onConfirm={() => onRemove(s.id)}
-                okText="删除"
-                cancelText="取消"
-                okButtonProps={{ danger: true }}
+            {/* X 按钮：hover 时显示 */}
+            <Popconfirm
+              title={<span style={{ color: '#f87171' }}>⚠ 删除学科「{s.label}」</span>}
+              description={
+                <div style={{ maxWidth: 260 }}>
+                  <div style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginBottom: 6 }}>
+                    删除后该学科下的所有数据（课件、图谱进度、练习记录）将被清空，且无法恢复。
+                  </div>
+                  <div style={{ color: isDark ? '#d1d5db' : '#374151', fontSize: 12 }}>
+                    确定要删除吗？
+                  </div>
+                </div>
+              }
+              onConfirm={() => onRemove(s.id)}
+              okText="确认删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+            >
+              <button
+                onClick={e => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  right: 6,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'rgba(239,68,68,0.25)',
+                  color: '#f87171',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  padding: 0,
+                  zIndex: 1,
+                  opacity: isHovered ? 1 : 0,
+                  transition: 'opacity 0.15s',
+                  lineHeight: 1,
+                }}
               >
-                <button
-                  style={{
-                    position: 'absolute',
-                    right: 5,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 16,
-                    height: 16,
-                    borderRadius: '50%',
-                    border: 'none',
-                    background: 'rgba(239,68,68,0.2)',
-                    color: '#f87171',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 10,
-                    padding: 0,
-                    zIndex: 1,
-                  }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  ×
-                </button>
-              </Popconfirm>
-            )}
+                ×
+              </button>
+            </Popconfirm>
           </div>
         )
       })}
 
-      {/* 添加科目按钮 */}
       <Tooltip title="新增学科">
         <button
           onClick={() => setAddModalOpen(true)}
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
+            width: 28, height: 28, borderRadius: '50%',
             border: `1px dashed ${isDark ? 'rgba(255,255,255,0.25)' : 'rgba(99,102,241,0.4)'}`,
             background: 'transparent',
             color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 16,
-            flexShrink: 0,
-            transition: 'all 0.15s',
+            cursor: 'pointer', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', fontSize: 16, flexShrink: 0, transition: 'all 0.15s',
           }}
-        >
-          +
-        </button>
+        >+</button>
       </Tooltip>
 
-      <AddSubjectModal
-        open={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
-        onAdd={onAdd}
-      />
+      <AddSubjectModal open={addModalOpen} onClose={() => setAddModalOpen(false)} onAdd={onAdd} />
     </div>
   )
 }
@@ -496,32 +484,59 @@ export default function App() {
         </div>
       )}
 
-      <style>{`
-        @keyframes discoSlide { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
-        @keyframes discoPulse {
-          0%, 100% { transform: scale(1) rotate(0deg); }
-          25% { transform: scale(1.3) rotate(-15deg); }
-          75% { transform: scale(1.3) rotate(15deg); }
-        }
-        @keyframes subjectGlow {
-          0%,100% { box-shadow: 0 0 10px ${currentTheme.glow}, 0 0 20px ${currentTheme.glowSoft}; }
-          50%      { box-shadow: 0 0 22px ${currentTheme.glow}, 0 0 44px ${currentTheme.glowSoft}; }
-        }
-        @keyframes flowLight {
-          0%   { background-position: 0% 50%; }
-          100% { background-position: 200% 50%; }
-        }
-        .disco-btn-icon { animation: ${discoMode ? 'discoPulse 0.4s ease-in-out infinite' : 'none'}; display: inline-flex; }
-        /* 选中科目标签呼吸灯 */
-        .subject-btn-selected {
-          animation: subjectGlow 1.8s ease-in-out infinite !important;
-        }
-        /* 科目标签悬停流光 */
-        .subject-btn:hover:not(.subject-btn-selected) {
-          filter: brightness(1.18);
-          transform: translateY(-1px);
-        }
-      `}</style>
+<style>{`
+  @keyframes discoSlide { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+  @keyframes discoPulse {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    25% { transform: scale(1.3) rotate(-15deg); }
+    75% { transform: scale(1.3) rotate(15deg); }
+  }
+  @keyframes subjectGlow {
+    0%,100% { box-shadow: 0 0 10px ${currentTheme.glow}, 0 0 20px ${currentTheme.glowSoft}; }
+    50%      { box-shadow: 0 0 22px ${currentTheme.glow}, 0 0 44px ${currentTheme.glowSoft}; }
+  }
+  @keyframes flowLight {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+  .disco-btn-icon { animation: ${discoMode ? 'discoPulse 0.4s ease-in-out infinite' : 'none'}; display: inline-flex; }
+  
+  /* 选中科目标签呼吸灯 */
+  .subject-btn-selected {
+    animation: subjectGlow 1.8s ease-in-out infinite !important;
+  }
+  
+  /* 科目标签悬停流光 */
+  .subject-btn:hover:not(.subject-btn-selected) {
+    filter: brightness(1.18);
+    transform: translateY(-1px);
+  }
+
+  /* ========================================= */
+  /* 新增：侧边栏菜单项的高级渐变色 (不重复色系) */
+  /* ========================================= */
+  
+  /* 仪表盘：Auroral Blue 到 Deep Purple 渐变 */
+  .menu-item-dashboard .anticon, .menu-item-dashboard .ant-menu-title-content {
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  /* 知识图谱：Neon Green 到 Cyan 渐变 */
+  .menu-item-graph .anticon, .menu-item-graph .ant-menu-title-content {
+    background: linear-gradient(135deg, #34d399, #22d3ee);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  /* 学生资料：Bright Orange 到 Magenta 渐变 */
+  .menu-item-resources .anticon, .menu-item-resources .ant-menu-title-content {
+    background: linear-gradient(135deg, #fb923c, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+`}</style>
 
       <Sider
         className="cy-app-sider"
