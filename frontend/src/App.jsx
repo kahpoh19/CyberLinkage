@@ -40,6 +40,7 @@ const { Sider, Content, Header } = Layout
 const { Title, Text } = Typography
 const SIDER_WIDTH = 200
 const SIDER_COLLAPSED_WIDTH = 80
+const BANANA_SLIDES_PATH = '/banana-slides/'
 
 const menuItems = [
   { key: '/', icon: <DashboardOutlined style={{ background: 'linear-gradient(135deg,#60a5fa,#a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />, label: '仪表盘' },
@@ -47,6 +48,7 @@ const menuItems = [
   { key: '/graph', icon: <ApartmentOutlined style={{ background: 'linear-gradient(135deg,#34d399,#22d3ee)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />, label: '知识图谱' },
   { key: '/path', icon: <NodeIndexOutlined />, label: '学习路径' },
   { key: '/chat', icon: <RobotOutlined />, label: 'AI 答疑' },
+  { key: BANANA_SLIDES_PATH, icon: <ReadOutlined />, label: '蕉幻 PPT' },
   { key: '/student-resources', icon: <FileTextOutlined style={{ background: 'linear-gradient(135deg,#fb923c,#f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />, label: '学生资料' },
   { key: '/teacher', icon: <BookOutlined />, label: '教师上传' },
   { key: '/sandbox', icon: <ToolOutlined />, label: '实战工坊' },
@@ -717,7 +719,13 @@ export default function App() {
           theme={isDark ? 'dark' : 'light'}
           selectedKeys={[location.pathname]}
           items={visibleMenuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => {
+            if (key === BANANA_SLIDES_PATH) {
+              window.location.assign(BANANA_SLIDES_PATH)
+              return
+            }
+            navigate(key)
+          }}
         />
       </Sider>
 

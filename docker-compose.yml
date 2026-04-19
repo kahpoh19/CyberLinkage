@@ -8,7 +8,10 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+      banana-frontend:
+        condition: service_started
     environment:
       - VITE_API_BASE=http://backend:8000
 
@@ -47,6 +50,59 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  banana-backend:
+    build:
+      context: "${BANANA_SLIDES_DIR:-./banana-slides}"
+      dockerfile: backend/Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
+        GHCR_REGISTRY: ${GHCR_REGISTRY:-ghcr.io/}
+        APT_MIRROR: ${APT_MIRROR:-}
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-}
+    container_name: banana-slides-backend
+    expose:
+      - "5000"
+    env_file:
+      - path: "${BANANA_SLIDES_DIR:-./banana-slides}/.env"
+        required: false
+    volumes:
+      - "${BANANA_SLIDES_DIR:-./banana-slides}/backend/instance:/app/backend/instance"
+      - "${BANANA_SLIDES_DIR:-./banana-slides}/uploads:/app/uploads"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    networks:
+      - banana-slides-network
+
+  banana-frontend:
+    build:
+      context: "${BANANA_SLIDES_DIR:-./banana-slides}"
+      dockerfile: frontend/Dockerfile
+      args:
+        DOCKER_BUILDKIT: 1
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        VITE_APP_BASE: ${BANANA_APP_BASE:-/banana-slides/}
+        VITE_API_BASE_URL: ${BANANA_API_BASE_URL:-/banana-slides}
+    container_name: banana-slides-frontend
+    expose:
+      - "80"
+    depends_on:
+      banana-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - default
+      - banana-slides-network
+
+networks:
+  banana-slides-network:
+    driver: bridge
 
 volumes:
   backend-data:
