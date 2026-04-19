@@ -143,17 +143,22 @@ async def generate_question_bank(
     persisted_count = 0
 
     if req.persist and questions:
+        course = result["subject_id"]
         target_kps = result["knowledge_points"]
         if req.replace_existing and target_kps:
             replaced_count = (
                 db.query(Exercise)
-                .filter(Exercise.knowledge_point_id.in_(target_kps))
+                .filter(
+                    Exercise.course == course,
+                    Exercise.knowledge_point_id.in_(target_kps),
+                )
                 .delete(synchronize_session=False)
             )
 
         for item in questions:
             db.add(
                 Exercise(
+                    course=course,
                     knowledge_point_id=item["knowledge_point_id"],
                     question_text=item["question_text"],
                     options=item["options"],

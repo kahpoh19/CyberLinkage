@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -21,8 +21,8 @@ class SummaryResponse(BaseModel):
     total_exercises: int
     total_correct: int
     accuracy: float
-    mastery_distribution: Dict[str, int]  # {"high": 10, "medium": 5, "low": 3}
-    recent_activity: List[Dict]  # 最近 7 天每日做题数
+    mastery_distribution: Dict[str, int]
+    recent_activity: List[Dict]
     days_active: int
 
 
@@ -34,26 +34,34 @@ class ProgressItem(BaseModel):
 
 @router.get("/summary", response_model=SummaryResponse)
 def get_summary(
+    course: Optional[str] = None,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """学习概况统计"""
-    # 做题总数和正确数
-    total = db.query(func.count(PracticeRecord.id)).filter(
+    total_query = db.query(func.count(PracticeRecord.id)).filter(
         PracticeRecord.user_id == user.id
-    ).scalar() or 0
+    )
+    if course:
+        total_query = total_query.filter(PracticeRecord.course == course)
+    total = total_query.scalar() or 0
 
-    correct = db.query(func.count(PracticeRecord.id)).filter(
+    correct_query = db.query(func.count(PracticeRecord.id)).filter(
         PracticeRecord.user_id == user.id,
         PracticeRecord.is_correct == True,
-    ).scalar() or 0
+    )
+    if course:
+        correct_query = correct_query.filter(PracticeRecord.course == course)
+    correct = correct_query.scalar() or 0
 
     accuracy = correct / total if total > 0 else 0
 
-    # 掌握度分布
-    states = db.query(KnowledgeState).filter(
+    states_query = db.query(KnowledgeState).filter(
         KnowledgeState.user_id == user.id
-    ).all()
+    )
+    if course:
+        states_query = states_query.filter(KnowledgeState.course == course)
+    states = states_query.all()
 
     distribution = {"high": 0, "medium": 0, "low": 0}
     for s in states:
@@ -64,12 +72,14 @@ def get_summary(
         else:
             distribution["low"] += 1
 
-    # 最近 7 天活跃度
     week_ago = datetime.utcnow() - timedelta(days=7)
-    recent_records = db.query(PracticeRecord).filter(
+    recent_query = db.query(PracticeRecord).filter(
         PracticeRecord.user_id == user.id,
         PracticeRecord.answered_at >= week_ago,
-    ).all()
+    )
+    if course:
+        recent_query = recent_query.filter(PracticeRecord.course == course)
+    recent_records = recent_query.all()
 
     daily_counts: Dict[str, int] = defaultdict(int)
     for r in recent_records:
@@ -81,10 +91,12 @@ def get_summary(
         for day, count in sorted(daily_counts.items())
     ]
 
-    # 活跃天数
-    all_dates = db.query(
+    all_dates_query = db.query(
         func.distinct(func.date(PracticeRecord.answered_at))
-    ).filter(PracticeRecord.user_id == user.id).all()
+    ).filter(PracticeRecord.user_id == user.id)
+    if course:
+        all_dates_query = all_dates_query.filter(PracticeRecord.course == course)
+    all_dates = all_dates_query.all()
     days_active = len(all_dates)
 
     return SummaryResponse(
@@ -99,13 +111,18 @@ def get_summary(
 
 @router.get("/progress", response_model=List[ProgressItem])
 def get_progress(
+    course: Optional[str] = None,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """各知识点掌握进度"""
-    states = db.query(KnowledgeState).filter(
+    states_query = db.query(KnowledgeState).filter(
         KnowledgeState.user_id == user.id
-    ).order_by(KnowledgeState.mastery_probability.asc()).all()
+    )
+    if course:
+        states_query = states_query.filter(KnowledgeState.course == course)
+
+    states = states_query.order_by(KnowledgeState.mastery_probability.asc()).all()
 
     return [
         ProgressItem(

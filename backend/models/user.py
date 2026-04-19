@@ -36,6 +36,7 @@ class KnowledgeState(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course = Column(String(50), nullable=False, index=True)
     knowledge_point_id = Column(String(50), nullable=False, index=True)
     mastery_probability = Column(Float, default=0.3)
     attempt_count = Column(Integer, default=0)

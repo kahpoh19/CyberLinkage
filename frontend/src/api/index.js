@@ -49,13 +49,16 @@ export const getMastery = (course = 'c_language') =>
 export const getPath = (course = 'c_language') =>
   api.get('/path/recommend', { params: { course } })
 
-export const getPathExercises = (knowledgePointId, count = 5) =>
-  api.get('/path/exercises', { params: { knowledge_point_id: knowledgePointId, count } })
+export const getPathExercises = (knowledgePointId, count = 5, course = 'c_language') =>
+  api.get('/path/exercises', { params: { knowledge_point_id: knowledgePointId, count, course } })
 
 // ─── 学习报告 ─────────────────────────────────────
 
-export const getReport = () => api.get('/report/summary')
-export const getProgress = () => api.get('/report/progress')
+export const getReport = (course) =>
+  api.get('/report/summary', { params: { course } })
+
+export const getProgress = (course) =>
+  api.get('/report/progress', { params: { course } })
 
 // ─── AI 答疑 ──────────────────────────────────────
 

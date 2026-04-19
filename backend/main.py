@@ -45,7 +45,32 @@ def ensure_user_profile_columns():
         conn.execute(text("UPDATE users SET theme = 'light' WHERE theme IS NULL"))
 
 
+def ensure_learning_columns():
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+
+    with engine.begin() as conn:
+        if "exercises" in tables:
+            columns = {col["name"] for col in inspector.get_columns("exercises")}
+            if "course" not in columns:
+                conn.execute(text("ALTER TABLE exercises ADD COLUMN course VARCHAR(50)"))
+                conn.execute(text("UPDATE exercises SET course = 'c_language' WHERE course IS NULL"))
+
+        if "practice_records" in tables:
+            columns = {col["name"] for col in inspector.get_columns("practice_records")}
+            if "course" not in columns:
+                conn.execute(text("ALTER TABLE practice_records ADD COLUMN course VARCHAR(50)"))
+                conn.execute(text("UPDATE practice_records SET course = 'c_language' WHERE course IS NULL"))
+
+        if "knowledge_states" in tables:
+            columns = {col["name"] for col in inspector.get_columns("knowledge_states")}
+            if "course" not in columns:
+                conn.execute(text("ALTER TABLE knowledge_states ADD COLUMN course VARCHAR(50)"))
+                conn.execute(text("UPDATE knowledge_states SET course = 'c_language' WHERE course IS NULL"))
+
+
 ensure_user_profile_columns()
+ensure_learning_columns()
 
 app = FastAPI(
     title="CyberLinkage API",
@@ -70,7 +95,7 @@ app.include_router(graph.router)
 app.include_router(path.router)
 app.include_router(report.router)
 app.include_router(profile.router)
-app.include_router(subjects.router)   # ← 新增科目路由
+app.include_router(subjects.router)
 app.include_router(question_bank.router)
 
 app.mount("/uploads", StaticFiles(directory=profile.UPLOAD_DIR), name="uploads")
