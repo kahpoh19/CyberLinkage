@@ -786,6 +786,20 @@ export default function Sandbox() {
         } else {
           joints[jIdx] = { ...j, x: nx, y: ny }
         }
+
+        joints.forEach((jj, idx) => {
+                if (jj && jj.driven && jj.pivotId === j.id) {
+                  joints[idx] = { ...jj, radius: dist2D(joints[jIdx], jj) }
+                }
+              })
+        // Also handle if the user directly drags the driven node itself
+        if (j.driven && j.pivotId) {
+          const pivot = joints.find(jj => jj && jj.id === j.pivotId)
+          if (pivot) {
+            joints[jIdx] = { ...joints[jIdx], radius: dist2D(joints[jIdx], pivot) }
+          }
+        }
+
         linksRef.current = linksRef.current.map(lk => {
           if (!lk) return lk
           if (lk.aId !== draggingRef.current.id && lk.bId !== draggingRef.current.id) return lk
@@ -1660,7 +1674,19 @@ const staticCurveData = useMemo(() => {
                   }}
                   onChange={e => {
                     const l = linksRef.current.find(l => l && l.id === selLink.id)
-                    if (l) { const v = Math.max(1, parseFloat(e.target.value) || 1); l.length = v; dispatch({ type: 'UPDATE_LINK', id: l.id, patch: { length: v } }) }
+                    if (l) { 
+                      const v = Math.max(1, parseFloat(e.target.value) || 1); 
+                      l.length = v; 
+                      // Sync radius if we are resizing a crank link
+                      const ja = jointsRef.current.find(j => j && j.id === l.aId);
+                      const jb = jointsRef.current.find(j => j && j.id === l.bId);
+                      if (ja && jb) {
+                        if (ja.driven && ja.pivotId === jb.id) ja.radius = v;
+                        if (jb.driven && jb.pivotId === ja.id) jb.radius = v;
+                      }
+                      
+                      dispatch({ type: 'UPDATE_LINK', id: l.id, patch: { length: v } }) 
+                    }
                   }} />
                 </label>
                 <div style={{ fontSize: 11, color: textSec }}>{selLink.aId} → {selLink.bId}</div>
