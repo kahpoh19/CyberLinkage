@@ -19,6 +19,7 @@ import ReadOutlined from '@ant-design/icons/es/icons/ReadOutlined'
 import PlusOutlined from '@ant-design/icons/es/icons/PlusOutlined'
 import DeleteOutlined from '@ant-design/icons/es/icons/DeleteOutlined'
 import WarningOutlined from '@ant-design/icons/es/icons/WarningOutlined'
+import DownOutlined from '@ant-design/icons/es/icons/DownOutlined'
 
 import Dashboard from './pages/Dashboard'
 import Diagnosis from './pages/Diagnosis'
@@ -149,118 +150,276 @@ function AddSubjectModal({ open, onClose, onAdd }) {
   )
 }
 
-// ── 科目栏组件（带渐变色、增删） ──────────────────────────────────
+
 function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDark }) {
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const [open, setOpen] = useState(false)
   const [hoveredId, setHoveredId] = useState(null)
+  const wrapperRef = useRef(null)
+
+  const activeIndex = Math.max(subjects.findIndex(s => s.id === currentSubject), 0)
+  const activeSubject = subjects[activeIndex] || subjects[0]
+  const activeTheme = getSubjectTheme(activeSubject?.id, activeIndex)
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
-      <ReadOutlined style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1', fontSize: 15, flexShrink: 0, marginRight: 2 }} />
+    <div
+      ref={wrapperRef}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flex: 1,
+        minWidth: 0,
+        position: 'relative',
+      }}
+    >
+      <ReadOutlined
+        style={{
+          color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1',
+          fontSize: 15,
+          flexShrink: 0,
+          marginRight: 2,
+        }}
+      />
 
-      {subjects.map((s, idx) => {
-        const isSelected = s.id === currentSubject
-        const theme = getSubjectTheme(s.id, idx)
-        const isHovered = hoveredId === s.id
+      {/* 当前选中学科按钮 */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 10,
+          minWidth: 180,
+          maxWidth: 260,
+          height: 36,
+          padding: '0 14px',
+          borderRadius: 12,
+          cursor: 'pointer',
+          border: `1px solid ${activeTheme.border}`,
+          background: activeTheme.gradient,
+          color: '#fff',
+          boxShadow: `0 0 14px ${activeTheme.glow}, 0 0 28px ${activeTheme.glowSoft}`,
+          fontSize: 14,
+          fontWeight: 700,
+          transition: 'all 0.2s ease',
+        }}
+      >
+        <span
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+            textAlign: 'left',
+          }}
+        >
+          {activeSubject?.label || '机械原理'}
+        </span>
+        <DownOutlined
+          style={{
+            fontSize: 12,
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s ease',
+          }}
+        />
+      </button>
 
-        return (
+      {/* 下拉展开面板 */}
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 10px)',
+            left: 24,
+            width: 320,
+            maxHeight: 420,
+            overflowY: 'auto',
+            padding: 12,
+            borderRadius: 16,
+            background: isDark ? 'rgba(10,14,28,0.96)' : 'rgba(255,255,255,0.96)',
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(99,102,241,0.14)'}`,
+            boxShadow: isDark
+              ? '0 18px 50px rgba(0,0,0,0.45)'
+              : '0 18px 50px rgba(15,23,42,0.16)',
+            backdropFilter: 'blur(14px)',
+            zIndex: 200,
+          }}
+        >
           <div
-            key={s.id}
-            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
-            onMouseEnter={() => setHoveredId(s.id)}
-            onMouseLeave={() => setHoveredId(null)}
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              marginBottom: 10,
+              color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(55,65,81,0.7)',
+            }}
           >
-            <button
-              onClick={() => onSelect(s.id)}
-              style={{
-                padding: '5px 14px',
-                paddingRight: '28px',
-                borderRadius: 20,
-                fontSize: 12,
-                fontWeight: isSelected ? 700 : 500,
-                cursor: 'pointer',
-                border: `1px solid ${theme.border}`,
-                transition: 'all 0.22s ease',
-                position: 'relative',
-                overflow: 'hidden',
-                ...(isSelected ? {
-                  background: theme.gradient,
-                  color: '#ffffff',
-                  boxShadow: `0 0 14px ${theme.glow}, 0 0 28px ${theme.glowSoft}`,
-                } : {
-                  background: isDark ? theme.glowSoft : theme.glowSoft,
-                  color: theme.primary,
-                }),
-              }}
-            >
-              {s.label}
-            </button>
+            选择学科
+          </div>
 
-            {/* X 按钮：hover 时显示 */}
-            <Popconfirm
-              title={<span style={{ color: '#f87171' }}>⚠ 删除学科「{s.label}」</span>}
-              description={
-                <div style={{ maxWidth: 260 }}>
-                  <div style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginBottom: 6 }}>
-                    删除后该学科下的所有数据（课件、图谱进度、练习记录）将被清空，且无法恢复。
-                  </div>
-                  <div style={{ color: isDark ? '#d1d5db' : '#374151', fontSize: 12 }}>
-                    确定要删除吗？
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {subjects.map((s, idx) => {
+              const isSelected = s.id === currentSubject
+              const isHovered = hoveredId === s.id
+              const theme = getSubjectTheme(s.id, idx)
+
+              return (
+                <div
+                  key={s.id}
+                  onMouseEnter={() => setHoveredId(s.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                >
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                    }}
+                  >
+                    <button
+                      onClick={() => {
+                        onSelect(s.id)
+                        setOpen(false)
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        minWidth: 0,
+                        height: 46,
+                        padding: '0 44px 0 14px', // 右边留空间给叉号
+                        borderRadius: 999,
+                        border: `1px solid ${theme.border}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        ...(isSelected
+                          ? {
+                            background: theme.gradient,
+                            color: '#fff',
+                            boxShadow: `0 0 12px ${theme.glow}, 0 0 24px ${theme.glowSoft}`,
+                            fontWeight: 700,
+                          }
+                          : {
+                            background: theme.glowSoft,
+                            color: theme.primary,
+                            fontWeight: 600,
+                          }),
+                      }}
+                    >
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          textAlign: 'left',
+                        }}
+                      >
+                        {s.label}
+                      </span>
+                    </button>
+
+                    <Popconfirm
+                      title={<span style={{ color: '#f87171' }}>⚠ 删除学科「{s.label}」</span>}
+                      description={
+                        <div style={{ maxWidth: 260 }}>
+                          <div style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginBottom: 6 }}>
+                            删除后该学科下的所有数据将被清空，且无法恢复。
+                          </div>
+                          <div style={{ color: isDark ? '#d1d5db' : '#374151', fontSize: 12 }}>
+                            确定要删除吗？
+                          </div>
+                        </div>
+                      }
+                      onConfirm={() => {
+                        onRemove(s.id)
+                        if (s.id === currentSubject) {
+                          setOpen(false)
+                        }
+                      }}
+                      okText="确认删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: 10,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: isHovered ? 'rgba(239,68,68,0.22)' : 'rgba(239,68,68,0.14)',
+                          color: '#f87171',
+                          cursor: 'pointer',
+                          fontSize: 14,
+                          lineHeight: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        ×
+                      </button>
+                    </Popconfirm>
                   </div>
                 </div>
-              }
-              onConfirm={() => onRemove(s.id)}
-              okText="确认删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-            >
-              <button
-                onClick={e => e.stopPropagation()}
-                style={{
-                  position: 'absolute',
-                  right: 6,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: 16,
-                  height: 16,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: 'rgba(239,68,68,0.25)',
-                  color: '#f87171',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  padding: 0,
-                  zIndex: 1,
-                  opacity: isHovered ? 1 : 0,
-                  transition: 'opacity 0.15s',
-                  lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
-            </Popconfirm>
+              )
+            })}
           </div>
-        )
-      })}
 
-      <Tooltip title="新增学科">
-        <button
-          onClick={() => setAddModalOpen(true)}
-          style={{
-            width: 28, height: 28, borderRadius: '50%',
-            border: `1px dashed ${isDark ? 'rgba(255,255,255,0.25)' : 'rgba(99,102,241,0.4)'}`,
-            background: 'transparent',
-            color: isDark ? 'rgba(255,255,255,0.45)' : '#6366f1',
-            cursor: 'pointer', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: 16, flexShrink: 0, transition: 'all 0.15s',
-          }}
-        >+</button>
-      </Tooltip>
+          <div
+            style={{
+              marginTop: 12,
+              paddingTop: 12,
+              borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(99,102,241,0.10)'}`,
+            }}
+          >
+            <button
+              onClick={() => setAddModalOpen(true)}
+              style={{
+                width: '100%',
+                height: 38,
+                borderRadius: 12,
+                border: `1px dashed ${isDark ? 'rgba(255,255,255,0.20)' : 'rgba(99,102,241,0.35)'}`,
+                background: 'transparent',
+                color: isDark ? 'rgba(255,255,255,0.78)' : '#4f46e5',
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'all 0.18s ease',
+              }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>＋</span>
+              添加新学科
+            </button>
+          </div>
+        </div>
+      )}
 
-      <AddSubjectModal open={addModalOpen} onClose={() => setAddModalOpen(false)} onAdd={onAdd} />
+      <AddSubjectModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onAdd={onAdd}
+      />
     </div>
   )
 }
