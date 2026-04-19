@@ -65,6 +65,11 @@ export const getProgress = (course) =>
 export const chatWithAI = (message, mode = 'socratic', history = []) =>
   api.post('/chat', { message, mode, history })
 
+// ─── AI 题库生成 ──────────────────────────────────────
+
+export const generateQuestionBank = (data) =>
+  api.post('/question-bank/generate', data)
+
 export default api
 
 // ─── 个人信息 ──────────────────────────────────────────
