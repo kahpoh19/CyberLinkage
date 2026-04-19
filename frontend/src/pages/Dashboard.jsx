@@ -22,13 +22,13 @@ export default function Dashboard() {
     if (isAuthenticated()) {
       loadData()
     }
-  }, [user, currentSubject])
+  }, [currentSubject, user?.id])
 
   const loadData = async () => {
     try {
       const [sumRes, progRes, meRes] = await Promise.all([
-        getReport(),
-        getProgress(),
+        getReport(currentSubject),
+        getProgress(currentSubject),
         getMe(),
       ])
       setSummary(sumRes.data)

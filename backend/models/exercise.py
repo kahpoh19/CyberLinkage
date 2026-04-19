@@ -9,6 +9,7 @@ class Exercise(Base):
     __tablename__ = "exercises"
 
     id = Column(Integer, primary_key=True, index=True)
+    course = Column(String(50), nullable=False, index=True)
     knowledge_point_id = Column(String(50), nullable=False, index=True)
     question_text = Column(Text, nullable=False)
     options = Column(JSON, nullable=False)  # {"A": "...", "B": "...", "C": "...", "D": "..."}

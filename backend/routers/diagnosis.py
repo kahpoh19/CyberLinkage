@@ -4,7 +4,7 @@ import json as json_lib
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -18,20 +18,16 @@ from services.neo4j_service import neo4j_service
 
 router = APIRouter(prefix="/api/diagnosis", tags=["诊断测评"])
 
-
-# ─── Schemas ────────────────────────────────────────────
-
 class ExerciseOut(BaseModel):
     id: int
     knowledge_point_id: str
     question_text: str
-    options: Dict[str, str]   # 保证返回 dict，不是字符串
+    options: Dict[str, str]
     difficulty: int
 
     @field_validator("options", mode="before")
     @classmethod
     def parse_options(cls, v: Any) -> Dict[str, str]:
-        """数据库里可能存的是 JSON 字符串，统一转成 dict"""
         if isinstance(v, str):
             return json_lib.loads(v)
         return v
@@ -47,7 +43,7 @@ class ExerciseReviewOut(ExerciseOut):
 
 class AnswerItem(BaseModel):
     exercise_id: int
-    answer: str  # "A", "B", "C", "D"
+    answer: str
 
 
 class SubmitRequest(BaseModel):
@@ -63,8 +59,6 @@ class DiagnosisResult(BaseModel):
     exercises: List[ExerciseReviewOut] = Field(default_factory=list)
 
 
-# ─── 路由 ───────────────────────────────────────────────
-
 @router.get("/start", response_model=List[ExerciseOut])
 def start_diagnosis(
     course: str = "c_language",
@@ -78,30 +72,28 @@ def start_diagnosis(
 
     若携带 knowledge_point_id，则进入学习路线中的专项测评模式，
     直接返回该知识点下的全部相关题目（或按 count 限制数量）。
-
-    修复点：
-    1. 新用户没有 KnowledgeState 时，直接从全部题库随机取题
-    2. options 字段统一 parse 为 dict
     """
     target_count = count if isinstance(count, int) and count > 0 else 10
 
     if knowledge_point_id:
         query = (
             db.query(Exercise)
-            .filter(Exercise.knowledge_point_id == knowledge_point_id)
+            .filter(
+                Exercise.course == course,
+                Exercise.knowledge_point_id == knowledge_point_id,
+            )
             .order_by(Exercise.difficulty.asc(), Exercise.id.asc())
         )
         if isinstance(count, int) and count > 0:
             query = query.limit(count)
         return query.all()
 
-    # 用户当前掌握状态
     states = db.query(KnowledgeState).filter(
-        KnowledgeState.user_id == user.id
+        KnowledgeState.user_id == user.id,
+        KnowledgeState.course == course,
     ).all()
     tested_kps = {s.knowledge_point_id: s.mastery_probability for s in states}
 
-    # 获取课程所有知识点
     try:
         graph = neo4j_service.get_knowledge_graph(course)
         all_kps = [n["id"] for n in graph.get("nodes", [])]
@@ -111,47 +103,43 @@ def start_diagnosis(
     exercises: List[Exercise] = []
 
     if all_kps:
-        # 未测试的知识点优先
         untested = [kp for kp in all_kps if kp not in tested_kps]
-        # 薄弱知识点（掌握度 < 0.7）按掌握度升序
         weak = sorted(
             [(kp, m) for kp, m in tested_kps.items() if m < 0.7],
             key=lambda x: x[1],
         )
         target_kps = untested + [kp for kp, _ in weak]
 
-        seen_ids: set = set()
+        seen_ids = set()
         for kp in target_kps:
             if len(exercises) >= target_count:
                 break
             kp_exercises = db.query(Exercise).filter(
-                Exercise.knowledge_point_id == kp
+                Exercise.course == course,
+                Exercise.knowledge_point_id == kp,
             ).limit(2).all()
             for ex in kp_exercises:
                 if ex.id not in seen_ids:
                     exercises.append(ex)
                     seen_ids.add(ex.id)
 
-        # 若还不够，从剩余题库补充
         if len(exercises) < target_count:
             existing_ids = {e.id for e in exercises}
-            more = (
-                db.query(Exercise)
-                .filter(Exercise.id.notin_(existing_ids))
-                .limit(target_count - len(exercises))
-                .all()
-            )
+            more_query = db.query(Exercise).filter(Exercise.course == course)
+            if existing_ids:
+                more_query = more_query.filter(Exercise.id.notin_(existing_ids))
+            more = more_query.limit(target_count - len(exercises)).all()
             exercises.extend(more)
     else:
-        # 知识图谱不可用时，直接取全部题库
-        exercises = db.query(Exercise).limit(target_count).all()
+        exercises = (
+            db.query(Exercise)
+            .filter(Exercise.course == course)
+            .limit(target_count)
+            .all()
+        )
 
-    # 最终保底：如果还是空，就取全部
     if not exercises:
-        exercises = db.query(Exercise).limit(target_count).all()
-
-    if not exercises:
-        return []   # 题库真的是空的
+        return []
 
     return exercises[:target_count]
 
@@ -164,7 +152,7 @@ def submit_diagnosis(
 ):
     """提交诊断答案，更新 BKT 掌握概率"""
     correct_count = 0
-    kp_responses: Dict[str, List[bool]] = {}
+    kp_responses: Dict[str, Dict[str, Any]] = {}
     review_exercises: List[Exercise] = []
 
     for item in req.answers:
@@ -178,27 +166,36 @@ def submit_diagnosis(
             correct_count += 1
 
         kp_id = exercise.knowledge_point_id
-        kp_responses.setdefault(kp_id, []).append(is_correct)
+        kp_responses.setdefault(kp_id, {
+            "course": exercise.course,
+            "responses": [],
+        })
+        kp_responses[kp_id]["responses"].append(is_correct)
 
         record = PracticeRecord(
             user_id=user.id,
             exercise_id=exercise.id,
+            course=exercise.course,
             knowledge_point_id=kp_id,
             is_correct=is_correct,
         )
         db.add(record)
 
-    # BKT 更新掌握概率
     mastery_map: Dict[str, float] = {}
-    for kp_id, responses in kp_responses.items():
+    for kp_id, payload in kp_responses.items():
+        course = payload["course"]
+        responses = payload["responses"]
+
         state = db.query(KnowledgeState).filter(
             KnowledgeState.user_id == user.id,
+            KnowledgeState.course == course,
             KnowledgeState.knowledge_point_id == kp_id,
         ).first()
 
         if not state:
             state = KnowledgeState(
                 user_id=user.id,
+                course=course,
                 knowledge_point_id=kp_id,
             )
             db.add(state)

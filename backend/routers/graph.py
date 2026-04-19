@@ -14,8 +14,6 @@ from services.neo4j_service import neo4j_service
 router = APIRouter(prefix="/api/graph", tags=["知识图谱"])
 
 
-# ─── Schemas ────────────────────────────────────────────
-
 class GraphNode(BaseModel):
     id: str
     name: str
@@ -24,12 +22,12 @@ class GraphNode(BaseModel):
     chapter: int = 0
     description: str = ""
     estimated_minutes: int = 30
-    mastery: Optional[float] = None  # 用户掌握度（未登录为 None）
+    mastery: Optional[float] = None
 
 
 class GraphEdge(BaseModel):
-    source: str  # from
-    target: str  # to
+    source: str
+    target: str
     relation: str = "prerequisite"
 
 
@@ -46,8 +44,6 @@ class MasteryItem(BaseModel):
     correct_count: int
 
 
-# ─── 路由 ───────────────────────────────────────────────
-
 @router.get("/{course}", response_model=GraphResponse)
 def get_graph(
     course: str,
@@ -61,11 +57,11 @@ def get_graph(
     """
     data = neo4j_service.get_knowledge_graph(course)
 
-    # 获取用户掌握度
     user_mastery: Dict[str, float] = {}
     if user:
         states = db.query(KnowledgeState).filter(
-            KnowledgeState.user_id == user.id
+            KnowledgeState.user_id == user.id,
+            KnowledgeState.course == course,
         ).all()
         user_mastery = {s.knowledge_point_id: s.mastery_probability for s in states}
 
@@ -101,12 +97,12 @@ def get_mastery(
     if not user:
         return []
 
-    # 获取课程所有知识点 ID
     graph = neo4j_service.get_knowledge_graph(course)
     kp_ids = {n["id"] for n in graph.get("nodes", [])}
 
     states = db.query(KnowledgeState).filter(
         KnowledgeState.user_id == user.id,
+        KnowledgeState.course == course,
         KnowledgeState.knowledge_point_id.in_(kp_ids),
     ).all()
 

@@ -27,7 +27,7 @@ class PathItem(BaseModel):
     mastery: float
     estimated_minutes: int = 30
     difficulty: int = 3
-    status: str  # "completed" | "in-progress" | "locked"
+    status: str
     recommended: bool = False
 
 
@@ -67,24 +67,20 @@ def recommend_path(
 
     基于用户当前掌握状态，生成按拓扑顺序排列的学习路径。
     """
-    # 获取用户掌握状态
     states = db.query(KnowledgeState).filter(
-        KnowledgeState.user_id == user.id
+        KnowledgeState.user_id == user.id,
+        KnowledgeState.course == course,
     ).all()
     mastery_map: Dict[str, float] = {
         s.knowledge_point_id: s.mastery_probability for s in states
     }
 
-    # 对于未测试的知识点，使用默认初始概率
     graph = neo4j_service.get_knowledge_graph(course)
     for node in graph.get("nodes", []):
         if node["id"] not in mastery_map:
-            mastery_map[node["id"]] = 0.3  # BKT 初始值
+            mastery_map[node["id"]] = 0.3
 
-    # 诊断薄弱点
     weak_points = bkt.diagnose_weak_points(mastery_map, threshold=0.7)
-
-    # 生成路径
     path = path_planner.generate(weak_points, course, mastery_map)
 
     total_minutes = sum(item["estimated_minutes"] for item in path)
@@ -100,6 +96,7 @@ def recommend_path(
 @router.get("/exercises", response_model=List[PathExerciseOut])
 def get_path_exercises(
     knowledge_point_id: str,
+    course: str = "c_language",
     count: int = 5,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
@@ -112,7 +109,10 @@ def get_path_exercises(
     _ = user
     exercises = (
         db.query(Exercise)
-        .filter(Exercise.knowledge_point_id == knowledge_point_id)
+        .filter(
+            Exercise.course == course,
+            Exercise.knowledge_point_id == knowledge_point_id,
+        )
         .order_by(Exercise.difficulty.asc(), Exercise.id.asc())
         .limit(max(1, min(count, 10)))
         .all()
