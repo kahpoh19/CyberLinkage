@@ -77,9 +77,7 @@ services:
       retries: 12
       start_period: 5s
     networks:
-      banana-slides-network:
-        aliases:
-          - backend
+      - banana-slides-network
 
   banana-frontend:
     build:

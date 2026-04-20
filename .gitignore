@@ -48,4 +48,3 @@ logs/
 docker-compose.override.yml
 
 # Local checkout used by the banana-slides compose integration
-/banana-slides/
