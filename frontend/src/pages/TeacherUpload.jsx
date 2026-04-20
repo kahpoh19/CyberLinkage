@@ -109,6 +109,16 @@ const clampNodeCount = value => {
   return Math.min(80, Math.max(5, parsed))
 }
 
+const normalizeNumberDraft = value =>
+  String(value ?? '').replace(/[^\d]/g, '')
+
+const keepMinimumOnDelete = (nextValue, previousValue, minimumValue) => {
+  const normalized = normalizeNumberDraft(nextValue)
+  return normalized === '' && previousValue === String(minimumValue)
+    ? String(minimumValue)
+    : normalized
+}
+
 const getApiErrorMessage = error =>
   error?.response?.data?.detail
   || error?.response?.data?.message
@@ -1403,7 +1413,7 @@ function KnowledgeGraphPanel({
 }) {
   const [subjectId, setSubjectId] = useState(() => resolvePreferredSubjectId(subjects, currentSubject))
   const [sourceText, setSourceText] = useState('')
-  const [expectedNodeCount, setExpectedNodeCount] = useState(15)
+  const [expectedNodeCountDraft, setExpectedNodeCountDraft] = useState('15')
   const [requestState, setRequestState] = useState('')
   const [result, setResult] = useState(null)
 
@@ -1412,6 +1422,12 @@ function KnowledgeGraphPanel({
       setSubjectId(resolvePreferredSubjectId(subjects, currentSubject))
     }
   }, [subjects, currentSubject, subjectId])
+
+  const expectedNodeCount = clampNodeCount(expectedNodeCountDraft)
+
+  const commitExpectedNodeCount = useCallback(() => {
+    setExpectedNodeCountDraft(String(clampNodeCount(expectedNodeCountDraft)))
+  }, [expectedNodeCountDraft])
 
   const canSubmit = !!subjectId && sourceText.trim().length >= 20
 
@@ -1422,6 +1438,8 @@ function KnowledgeGraphPanel({
     }
 
     const subject = subjects.find(item => item.id === subjectId)
+    const normalizedExpectedNodeCount = clampNodeCount(expectedNodeCountDraft)
+    setExpectedNodeCountDraft(String(normalizedExpectedNodeCount))
     setRequestState(persist ? 'persist' : 'preview')
 
     try {
@@ -1429,7 +1447,7 @@ function KnowledgeGraphPanel({
         subject_id: subjectId,
         subject_name: subject?.label || subjectId,
         source_text: sourceText.trim(),
-        expected_node_count: expectedNodeCount,
+        expected_node_count: normalizedExpectedNodeCount,
         persist,
       })
 
@@ -1444,7 +1462,7 @@ function KnowledgeGraphPanel({
     } finally {
       setRequestState('')
     }
-  }, [canSubmit, expectedNodeCount, sourceText, subjectId, subjects])
+  }, [canSubmit, expectedNodeCountDraft, sourceText, subjectId, subjects])
 
   return (
     <Card accent="rgba(56,189,248,0.18)" mb={20}>
@@ -1472,15 +1490,23 @@ function KnowledgeGraphPanel({
         </div>
 
         <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
-            目标知识点数量
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)' }}>
+              目标知识点数量
+            </label>
+            <span style={{ fontSize: 11, color: 'var(--t-text-sub)' }}>
+              最小值 5，到下限后不可继续删除
+            </span>
+          </div>
           <input
             type="number"
             min="5"
             max="80"
-            value={expectedNodeCount}
-            onChange={event => setExpectedNodeCount(clampNodeCount(event.target.value))}
+            value={expectedNodeCountDraft}
+            onChange={event => setExpectedNodeCountDraft(previousValue => (
+              keepMinimumOnDelete(event.target.value, previousValue, 5)
+            ))}
+            onBlur={commitExpectedNodeCount}
             style={{
               width: '100%',
               height: 40,
@@ -1752,7 +1778,7 @@ function QuestionBankPanel({
   const [knowledgePoints, setKnowledgePoints] = useState([])
   const [selectedKnowledgePointIds, setSelectedKnowledgePointIds] = useState([])
   const [useAllKnowledgePoints, setUseAllKnowledgePoints] = useState(false)
-  const [questionsPerPoint, setQuestionsPerPoint] = useState(3)
+  const [questionsPerPointDraft, setQuestionsPerPointDraft] = useState('3')
   const [replaceExisting, setReplaceExisting] = useState(true)
   const [graphLoading, setGraphLoading] = useState(false)
   const [graphError, setGraphError] = useState('')
@@ -1814,6 +1840,12 @@ function QuestionBankPanel({
     }))
   ), [knowledgePoints])
 
+  const questionsPerPoint = clampQuestionCount(questionsPerPointDraft)
+
+  const commitQuestionsPerPoint = useCallback(() => {
+    setQuestionsPerPointDraft(String(clampQuestionCount(questionsPerPointDraft)))
+  }, [questionsPerPointDraft])
+
   const selectedCount = useAllKnowledgePoints
     ? knowledgePoints.length
     : selectedKnowledgePointIds.length
@@ -1835,10 +1867,12 @@ function QuestionBankPanel({
 
     setRequestState(persist ? 'persist' : 'preview')
     try {
+      const normalizedQuestionsPerPoint = clampQuestionCount(questionsPerPointDraft)
+      setQuestionsPerPointDraft(String(normalizedQuestionsPerPoint))
       const response = await generateQuestionBank({
         subject_id: subjectId,
         knowledge_point_ids: useAllKnowledgePoints ? [] : selectedKnowledgePointIds,
-        questions_per_point: questionsPerPoint,
+        questions_per_point: normalizedQuestionsPerPoint,
         persist,
         replace_existing: replaceExisting,
       })
@@ -1857,7 +1891,7 @@ function QuestionBankPanel({
   }, [
     canSubmit,
     graphLoading,
-    questionsPerPoint,
+    questionsPerPointDraft,
     replaceExisting,
     selectedKnowledgePointIds,
     subjectId,
@@ -1890,15 +1924,23 @@ function QuestionBankPanel({
         </div>
 
         <div>
-          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
-            每个知识点题量
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)' }}>
+              每个知识点题量
+            </label>
+            <span style={{ fontSize: 11, color: 'var(--t-text-sub)' }}>
+              最小值 1，到下限后不可继续删除
+            </span>
+          </div>
           <input
             type="number"
             min="1"
             max="10"
-            value={questionsPerPoint}
-            onChange={event => setQuestionsPerPoint(clampQuestionCount(event.target.value))}
+            value={questionsPerPointDraft}
+            onChange={event => setQuestionsPerPointDraft(previousValue => (
+              keepMinimumOnDelete(event.target.value, previousValue, 1)
+            ))}
+            onBlur={commitQuestionsPerPoint}
             style={{
               width: '100%',
               height: 40,

@@ -17,6 +17,10 @@ export default function Chat() {
   const setChatLoading = useUserStore((s) => s.setChatLoading)
   const [input, setInput] = useState('')
   const messagesEndRef = useRef(null)
+  const currentModeLabel = socraticMode ? '苏格拉底式引导' : '直接解释'
+  const currentModeHint = socraticMode
+    ? 'AI 会优先通过提问和提示带你自己想出来。'
+    : 'AI 会直接讲解结论、原因和解题步骤。'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -71,8 +75,11 @@ export default function Chat() {
         <Title level={4} style={{ margin: 0 }}>
           <RobotOutlined /> AI 答疑
         </Title>
-        <Space>
-          <Text type="secondary">苏格拉底式引导</Text>
+        <Space direction="vertical" size={2} align="end">
+          <Text type="secondary">当前模式：{currentModeLabel}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {currentModeHint}
+          </Text>
           <Switch
             checked={socraticMode}
             onChange={setSocraticMode}

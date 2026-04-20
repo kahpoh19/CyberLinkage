@@ -123,22 +123,24 @@ class SocraticTutor:
         mastery: Dict[str, float],
         topic: Optional[str],
     ) -> str:
-        base = SOCRATIC_PROMPT if SOCRATIC_PROMPT else "你是CyberLinkage助教，一个C语言学习辅导AI。"
+        generic_base = "你是 CyberLinkage 助教，一个专注于 C 语言程序设计的 AI 学习辅导老师。"
+        base = SOCRATIC_PROMPT if mode == "socratic" and SOCRATIC_PROMPT else generic_base
 
         mode_instruction = ""
         if mode == "socratic":
             mode_instruction = (
                 "\n\n【当前模式：苏格拉底式引导】\n"
-                "- 不要直接给出答案\n"
-                "- 通过提问引导学生思考\n"
-                "- 如果学生多次回答错误，逐步增加提示力度"
+                "- 不要一上来直接给出最终答案或完整代码\n"
+                "- 优先提出 1 到 2 个关键问题，引导学生自己思考\n"
+                "- 只有在学生明确要求直接答案，或多轮引导仍无进展时，才逐步增加提示力度"
             )
         else:
             mode_instruction = (
                 "\n\n【当前模式：直接解释】\n"
-                "- 详细解释概念和解题过程\n"
-                "- 举例说明\n"
-                "- 总结要点"
+                "- 直接回答问题，不要把主要内容写成连续追问\n"
+                "- 先给出结论，再解释原因、步骤和必要示例\n"
+                "- 如果适合，可以直接给出代码、公式或操作方法\n"
+                "- 除非必须澄清问题，否则不要只回一个反问句"
             )
 
         mastery_info = ""
