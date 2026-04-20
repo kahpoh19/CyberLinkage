@@ -1784,6 +1784,7 @@ function QuestionBankPanel({
   const [graphError, setGraphError] = useState('')
   const [requestState, setRequestState] = useState('')
   const [result, setResult] = useState(null)
+  const [showAllQuestions, setShowAllQuestions] = useState(false)
 
   useEffect(() => {
     if (!subjects.some(subject => subject.id === subjectId)) {
@@ -1811,6 +1812,7 @@ function QuestionBankPanel({
         setKnowledgePoints(nodes)
         setSelectedKnowledgePointIds(prev => prev.filter(id => nodes.some(node => node.id === id)))
         setResult(null)
+        setShowAllQuestions(false)
 
         if (!nodes.length) {
           setGraphError('当前科目还没有知识图谱数据，暂时不能直接生成题库。')
@@ -1854,6 +1856,9 @@ function QuestionBankPanel({
     && knowledgePoints.length > 0
     && (useAllKnowledgePoints || selectedKnowledgePointIds.length > 0)
     && !graphLoading
+  const previewQuestions = showAllQuestions
+    ? result?.questions || []
+    : (result?.questions || []).slice(0, 6)
 
   const runGeneration = useCallback(async (persist) => {
     if (!canSubmit) {
@@ -1878,6 +1883,7 @@ function QuestionBankPanel({
       })
 
       setResult(response.data)
+      setShowAllQuestions((response.data.questions || []).length <= 6)
       message.success(
         persist
           ? `题库已更新，成功写入 ${response.data.persisted_count} 道题`
@@ -2073,14 +2079,26 @@ function QuestionBankPanel({
               </div>
             </div>
             {result.questions.length > 6 && (
-              <span style={{ fontSize: 12, color: 'var(--t-text-sub)' }}>
-                仅预览前 6 道
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowAllQuestions(current => !current)}
+                style={{
+                  border: '0.5px solid rgba(56,189,248,0.28)',
+                  background: 'rgba(56,189,248,0.10)',
+                  color: '#7dd3fc',
+                  borderRadius: 999,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                {showAllQuestions ? '收起为前 6 道' : `显示全部 ${result.questions.length} 道`}
+              </button>
             )}
           </div>
 
           <div style={{ display: 'grid', gap: 12 }}>
-            {result.questions.slice(0, 6).map((item, index) => (
+            {previewQuestions.map((item, index) => (
               <QuestionPreviewCard key={`${item.knowledge_point_id}-${index}`} item={item} index={index} />
             ))}
           </div>

@@ -1,5 +1,6 @@
 """AI 题库生成器。"""
 
+import asyncio
 import json
 import os
 import re
@@ -47,11 +48,20 @@ class QuestionBankGenerator:
         api_key: Optional[str] = None,
         model: Optional[str] = None,
         knowledge_data_dir: Optional[str] = None,
+        max_concurrency: Optional[int] = None,
     ):
         self.api_base = api_base or os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
         self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
         self.model = (model or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL") or "").strip()
         self.knowledge_data_dir = knowledge_data_dir or DEFAULT_KNOWLEDGE_DATA_DIR
+        configured_concurrency = max_concurrency
+        if configured_concurrency is None:
+            configured_concurrency = os.getenv("QUESTION_BANK_MAX_CONCURRENCY", "8")
+        try:
+            configured_concurrency = int(configured_concurrency)
+        except (TypeError, ValueError):
+            configured_concurrency = 8
+        self.max_concurrency = max(1, min(8, configured_concurrency))
 
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY 未配置")
@@ -92,17 +102,13 @@ class QuestionBankGenerator:
         if max_points is not None:
             selected_nodes = selected_nodes[:max_points]
 
-        questions: List[Dict[str, Any]] = []
-        for node in selected_nodes:
-            questions.extend(
-                await self.generate_for_knowledge_point(
-                    subject_id=subject_id,
-                    subject_name=subject_name,
-                    knowledge_point=node,
-                    graph=graph,
-                    questions_per_point=questions_per_point,
-                )
-            )
+        questions = await self._generate_questions_for_nodes(
+            subject_id=subject_id,
+            subject_name=subject_name,
+            selected_nodes=selected_nodes,
+            graph=graph,
+            questions_per_point=questions_per_point,
+        )
 
         return {
             "subject_id": subject_id,
@@ -110,6 +116,53 @@ class QuestionBankGenerator:
             "knowledge_points": [node["id"] for node in selected_nodes],
             "questions": questions,
         }
+
+    async def _generate_questions_for_nodes(
+        self,
+        subject_id: str,
+        subject_name: str,
+        selected_nodes: Sequence[Dict[str, Any]],
+        graph: Dict[str, Any],
+        questions_per_point: int,
+    ) -> List[Dict[str, Any]]:
+        if not selected_nodes:
+            return []
+
+        if len(selected_nodes) == 1 or self.max_concurrency <= 1:
+            questions: List[Dict[str, Any]] = []
+            for node in selected_nodes:
+                questions.extend(
+                    await self.generate_for_knowledge_point(
+                        subject_id=subject_id,
+                        subject_name=subject_name,
+                        knowledge_point=node,
+                        graph=graph,
+                        questions_per_point=questions_per_point,
+                    )
+                )
+            return questions
+
+        semaphore = asyncio.Semaphore(min(self.max_concurrency, len(selected_nodes)))
+
+        async def generate_one(index: int, node: Dict[str, Any]):
+            async with semaphore:
+                node_questions = await self.generate_for_knowledge_point(
+                    subject_id=subject_id,
+                    subject_name=subject_name,
+                    knowledge_point=node,
+                    graph=graph,
+                    questions_per_point=questions_per_point,
+                )
+                return index, node_questions
+
+        results = await asyncio.gather(
+            *(generate_one(index, node) for index, node in enumerate(selected_nodes))
+        )
+
+        questions: List[Dict[str, Any]] = []
+        for _, node_questions in sorted(results, key=lambda item: item[0]):
+            questions.extend(node_questions)
+        return questions
 
     async def generate_for_knowledge_point(
         self,
