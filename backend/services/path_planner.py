@@ -33,10 +33,23 @@ class PathPlanner:
         Returns:
             有序学习路径 [{"id", "name", "mastery", "estimated_minutes", "status"}, ...]
         """
+        graph_data = neo4j_service.get_knowledge_graph(course)
+        return self.generate_from_graph(
+            weak_points=weak_points,
+            graph_data=graph_data,
+            mastery_map=mastery_map,
+        )
+
+    def generate_from_graph(
+        self,
+        weak_points: List[Tuple[str, float]],
+        graph_data: Dict,
+        mastery_map: Dict[str, float] = None,
+    ) -> List[Dict]:
+        """基于指定知识图谱生成学习路径。"""
         if mastery_map is None:
             mastery_map = {kp_id: m for kp_id, m in weak_points}
 
-        graph_data = neo4j_service.get_knowledge_graph(course)
         nodes_info = {n["id"]: n for n in graph_data.get("nodes", [])}
         all_nodes = [n["id"] for n in graph_data.get("nodes", [])]
 

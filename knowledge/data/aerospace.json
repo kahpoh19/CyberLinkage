@@ -1,0 +1,115 @@
+{
+  "course": "aerospace",
+  "name": "航空航天概论",
+  "nodes": [
+    {
+      "id": "history_overview",
+      "name": "航空航天发展史概述",
+      "category": "历史",
+      "difficulty": 1,
+      "chapter": 1,
+      "description": "回顾人类航空航天的起源与重要里程碑。",
+      "estimated_minutes": 30
+    },
+    {
+      "id": "development_trends",
+      "name": "航空航天发展趋势",
+      "category": "发展",
+      "difficulty": 2,
+      "chapter": 2,
+      "description": "分析当代航空航天技术的主流方向与未来展望。",
+      "estimated_minutes": 35
+    },
+    {
+      "id": "basic_principles",
+      "name": "航空航天基本原理",
+      "category": "原理",
+      "difficulty": 2,
+      "chapter": 3,
+      "description": "介绍飞行、轨道和推进的基本物理原理。",
+      "estimated_minutes": 40
+    },
+    {
+      "id": "governing_equations",
+      "name": "航空动力学方程组",
+      "category": "方程组",
+      "difficulty": 3,
+      "chapter": 4,
+      "description": "阐述欧拉方程、纳维-斯托克斯方程及其在航空中的应用。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "lab_experiments",
+      "name": "航空航天实验设计",
+      "category": "实验",
+      "difficulty": 3,
+      "chapter": 5,
+      "description": "讲解常见风洞、轨道模拟等实验的设计要点。",
+      "estimated_minutes": 35
+    },
+    {
+      "id": "experiment_analysis",
+      "name": "实验数据解析方法",
+      "category": "实验解析",
+      "difficulty": 4,
+      "chapter": 6,
+      "description": "介绍实验结果的处理、误差分析与数值验证技术。",
+      "estimated_minutes": 40
+    },
+    {
+      "id": "modern_aero_theory",
+      "name": "现代空气动力学理论",
+      "category": "现代空气动力学理论",
+      "difficulty": 4,
+      "chapter": 7,
+      "description": "覆盖跨声速、超声速及高超声速流动的最新理论模型。",
+      "estimated_minutes": 50
+    },
+    {
+      "id": "china_aerospace",
+      "name": "新中国航空航天成就",
+      "category": "新中国航空航天",
+      "difficulty": 2,
+      "chapter": 8,
+      "description": "概述新中国成立后航空航天事业的主要突破与工程实例。",
+      "estimated_minutes": 30
+    }
+  ],
+  "edges": [
+    {
+      "from": "history_overview",
+      "to": "development_trends",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "development_trends",
+      "to": "basic_principles",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "basic_principles",
+      "to": "governing_equations",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "governing_equations",
+      "to": "lab_experiments",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "lab_experiments",
+      "to": "experiment_analysis",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "governing_equations",
+      "to": "modern_aero_theory",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "basic_principles",
+      "to": "china_aerospace",
+      "relation": "prerequisite"
+    }
+  ]
+}

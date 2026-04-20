@@ -44,6 +44,9 @@ export const getGraph = (course = 'c_language') =>
 export const getMastery = (course = 'c_language') =>
   api.get(`/graph/${course}/mastery`)
 
+export const generateKnowledgeGraph = (data) =>
+  api.post('/graph/generate', data)
+
 // ─── 学习路径 ─────────────────────────────────────
 
 export const getPath = (course = 'c_language') =>

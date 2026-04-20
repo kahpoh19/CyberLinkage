@@ -12,7 +12,7 @@ import React, {
 } from 'react'
 import { DatePicker, Tooltip, Select, message } from 'antd'
 import dayjs from 'dayjs'
-import { generateQuestionBank, getGraph } from '../api'
+import { generateKnowledgeGraph, generateQuestionBank, getGraph } from '../api'
 import useTeacherStore from '../store/teacherStore'
 import useUserStore from '../store/userStore'
 
@@ -101,6 +101,12 @@ const clampQuestionCount = value => {
   const parsed = Number.parseInt(value, 10)
   if (Number.isNaN(parsed)) return 3
   return Math.min(10, Math.max(1, parsed))
+}
+
+const clampNodeCount = value => {
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed)) return 15
+  return Math.min(80, Math.max(5, parsed))
 }
 
 const getApiErrorMessage = error =>
@@ -1236,6 +1242,368 @@ function GenerateButton({ onClick, disabled, busy, accent, children }) {
   )
 }
 
+function KnowledgeGraphSummary({ result }) {
+  if (!result) return null
+
+  const chips = [
+    { label: '知识点', value: `${result.node_count} 个`, color: '#22c55e' },
+    { label: '依赖关系', value: `${result.edge_count} 条`, color: '#38bdf8' },
+    { label: '路径节点', value: `${result.path_preview.length} 个`, color: '#f59e0b' },
+    { label: '保存状态', value: result.persisted ? '已写入' : '仅预览', color: '#c084fc' },
+  ]
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+      gap: 10,
+      marginBottom: 16,
+    }}>
+      {chips.map(chip => (
+        <div
+          key={chip.label}
+          style={{
+            padding: '12px 14px',
+            borderRadius: 14,
+            border: `0.5px solid ${chip.color}33`,
+            background: `${chip.color}14`,
+          }}
+        >
+          <div style={{ fontSize: 11, color: 'var(--t-text-sub)', marginBottom: 6 }}>{chip.label}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-text)' }}>{chip.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function GraphNodePreviewCard({ node }) {
+  return (
+    <div style={{
+      padding: '14px 16px',
+      borderRadius: 14,
+      border: '0.5px solid var(--t-border)',
+      background: 'var(--t-row)',
+    }}>
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignItems: 'center',
+        marginBottom: 10,
+      }}>
+        <span style={{
+          padding: '2px 8px',
+          borderRadius: 999,
+          fontSize: 11,
+          color: 'var(--t-text-sub)',
+          background: 'rgba(56,189,248,0.12)',
+          border: '0.5px solid rgba(56,189,248,0.28)',
+        }}>
+          第 {node.chapter || 0} 章
+        </span>
+        <span style={{
+          padding: '2px 8px',
+          borderRadius: 999,
+          fontSize: 11,
+          color: 'var(--t-text-sub)',
+          background: 'rgba(245,158,11,0.12)',
+          border: '0.5px solid rgba(245,158,11,0.28)',
+        }}>
+          难度 {node.difficulty}
+        </span>
+        <span style={{
+          padding: '2px 8px',
+          borderRadius: 999,
+          fontSize: 11,
+          color: 'var(--t-text-sub)',
+          background: 'rgba(192,132,252,0.12)',
+          border: '0.5px solid rgba(192,132,252,0.28)',
+        }}>
+          {node.id}
+        </span>
+      </div>
+
+      <div style={{
+        fontSize: 15,
+        fontWeight: 600,
+        lineHeight: 1.55,
+        color: 'var(--t-text)',
+        marginBottom: 8,
+      }}>
+        {node.name}
+      </div>
+
+      <div style={{
+        fontSize: 12,
+        color: 'var(--t-text-sub)',
+        marginBottom: 8,
+      }}>
+        {node.category || '未分类'} · 预计 {node.estimated_minutes || 30} 分钟
+      </div>
+
+      <div style={{
+        fontSize: 12,
+        lineHeight: 1.7,
+        color: 'var(--t-text-sub)',
+      }}>
+        {node.description || '暂无描述'}
+      </div>
+    </div>
+  )
+}
+
+function PathPreviewList({ items }) {
+  if (!items?.length) return null
+
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {items.slice(0, 8).map((item, index) => (
+        <div
+          key={item.id}
+          style={{
+            padding: '12px 14px',
+            borderRadius: 12,
+            border: '0.5px solid var(--t-border)',
+            background: item.recommended
+              ? 'rgba(34,197,94,0.10)'
+              : 'rgba(255,255,255,0.02)',
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 10,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            marginBottom: 6,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-text)' }}>
+              {index + 1}. {item.name}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--t-text-sub)' }}>第 {item.chapter || 0} 章</span>
+              <span style={{ fontSize: 11, color: item.recommended ? '#22c55e' : 'var(--t-text-sub)' }}>
+                {item.recommended ? '推荐重点' : item.status}
+              </span>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--t-text-sub)', lineHeight: 1.6 }}>
+            {item.description || '暂无描述'}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function KnowledgeGraphPanel({
+  subjects,
+  currentSubject,
+}) {
+  const [subjectId, setSubjectId] = useState(() => resolvePreferredSubjectId(subjects, currentSubject))
+  const [sourceText, setSourceText] = useState('')
+  const [expectedNodeCount, setExpectedNodeCount] = useState(15)
+  const [requestState, setRequestState] = useState('')
+  const [result, setResult] = useState(null)
+
+  useEffect(() => {
+    if (!subjects.some(subject => subject.id === subjectId)) {
+      setSubjectId(resolvePreferredSubjectId(subjects, currentSubject))
+    }
+  }, [subjects, currentSubject, subjectId])
+
+  const canSubmit = !!subjectId && sourceText.trim().length >= 20
+
+  const runGeneration = useCallback(async (persist) => {
+    if (!canSubmit) {
+      message.warning('请先填写至少 20 个字符的课程说明、教学目标或章节大纲')
+      return
+    }
+
+    const subject = subjects.find(item => item.id === subjectId)
+    setRequestState(persist ? 'persist' : 'preview')
+
+    try {
+      const response = await generateKnowledgeGraph({
+        subject_id: subjectId,
+        subject_name: subject?.label || subjectId,
+        source_text: sourceText.trim(),
+        expected_node_count: expectedNodeCount,
+        persist,
+      })
+
+      setResult(response.data)
+      message.success(
+        persist
+          ? `知识图谱已保存，共写入 ${response.data.node_count} 个知识点`
+          : `已生成 ${response.data.node_count} 个知识点的预览图谱`
+      )
+    } catch (error) {
+      message.error(getApiErrorMessage(error))
+    } finally {
+      setRequestState('')
+    }
+  }, [canSubmit, expectedNodeCount, sourceText, subjectId, subjects])
+
+  return (
+    <Card accent="rgba(56,189,248,0.18)" mb={20}>
+      <SectionLabel>AI 生成知识图谱与学习路径</SectionLabel>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gap: 18,
+        marginBottom: 18,
+      }}>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
+            目标科目
+          </label>
+          <Select
+            value={subjectId}
+            onChange={value => setSubjectId(value)}
+            options={subjects.map(subject => ({ value: subject.id, label: subject.label }))}
+            style={{ width: '100%' }}
+          />
+          <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: '8px 0 0', lineHeight: 1.6 }}>
+            AI 会先生成标准知识图谱，再自动推导一版默认学习路径预览。
+          </p>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
+            目标知识点数量
+          </label>
+          <input
+            type="number"
+            min="5"
+            max="80"
+            value={expectedNodeCount}
+            onChange={event => setExpectedNodeCount(clampNodeCount(event.target.value))}
+            style={{
+              width: '100%',
+              height: 40,
+              borderRadius: 10,
+              border: '0.5px solid var(--t-border-acc)',
+              background: 'var(--t-input-bg)',
+              color: 'var(--t-text)',
+              padding: '0 12px',
+              boxSizing: 'border-box',
+            }}
+          />
+          <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: '8px 0 0', lineHeight: 1.6 }}>
+            建议先从 10 到 18 个知识点开始，预览结构合理后再继续细化。
+          </p>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: result ? 18 : 16 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-sub)', display: 'block', marginBottom: 8 }}>
+          课程说明 / 教学目标 / 章节大纲
+        </label>
+        <textarea
+          value={sourceText}
+          onChange={event => setSourceText(event.target.value)}
+          placeholder={'例如：\n1. 第1章：程序设计基础，介绍程序、算法、流程图、变量与数据类型。\n2. 第2章：顺序结构与输入输出，掌握 printf/scanf。\n3. 第3章：选择结构与循环结构。\n4. 第4章：数组、函数、指针。\n5. 课程目标：能完成基础 C 语言程序设计与调试。'}
+          style={{
+            width: '100%',
+            minHeight: 180,
+            resize: 'vertical',
+            borderRadius: 14,
+            border: '0.5px solid var(--t-border-acc)',
+            background: 'var(--t-input-bg)',
+            color: 'var(--t-text)',
+            padding: '12px 14px',
+            boxSizing: 'border-box',
+            lineHeight: 1.7,
+            fontSize: 13,
+          }}
+        />
+        <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: '8px 0 0', lineHeight: 1.6 }}>
+          文本越具体，AI 生成的章节划分、依赖关系和默认学习路径越稳定。
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: result ? 18 : 0 }}>
+        <GenerateButton
+          onClick={() => runGeneration(false)}
+          disabled={!canSubmit}
+          busy={requestState === 'preview'}
+          accent="#38bdf8"
+        >
+          预览图谱
+        </GenerateButton>
+        <GenerateButton
+          onClick={() => runGeneration(true)}
+          disabled={!canSubmit}
+          busy={requestState === 'persist'}
+          accent="#22c55e"
+        >
+          保存图谱并更新路径
+        </GenerateButton>
+      </div>
+
+      {result && (
+        <div style={{ marginTop: 18 }}>
+          <KnowledgeGraphSummary result={result} />
+
+          {!!result.warnings?.length && (
+            <div style={{
+              marginBottom: 16,
+              padding: '12px 14px',
+              borderRadius: 12,
+              border: '0.5px solid rgba(245,158,11,0.28)',
+              background: 'rgba(245,158,11,0.10)',
+              color: 'var(--t-text-sub)',
+              fontSize: 12,
+              lineHeight: 1.7,
+            }}>
+              {result.warnings.map((warning, index) => (
+                <div key={`${warning}-${index}`}>• {warning}</div>
+              ))}
+            </div>
+          )}
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 16,
+          }}>
+            <div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-text)' }}>
+                  知识图谱预览
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--t-text-sub)', marginTop: 4 }}>
+                  {result.subject_name} · 仅展示前 6 个知识点
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: 12 }}>
+                {(result.graph?.nodes || []).slice(0, 6).map(node => (
+                  <GraphNodePreviewCard key={node.id} node={node} />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-text)' }}>
+                  默认学习路径预览
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--t-text-sub)', marginTop: 4 }}>
+                  保存后，学习路径页会基于这份图谱继续做个性化排序
+                </div>
+              </div>
+              <PathPreviewList items={result.path_preview || []} />
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function QuestionBankSummary({ result, selectedCount, usingAllKnowledgePoints }) {
   if (!result) return null
 
@@ -1789,7 +2157,7 @@ export default function TeacherUpload() {
           课程资料管理
         </h1>
         <p style={{ fontSize: 13, color: 'var(--t-text-sub)', margin: 0, lineHeight: 1.75, maxWidth: 600 }}>
-          上传课程大纲或 PPT，AI 学伴将自动生成知识图谱和课后练习。您可以为每个文件独立控制学生可见性，或设置定时发布。
+          上传课程资料后，您也可以直接在下方粘贴章节大纲，让 AI 生成知识图谱、默认学习路径和课后练习。文件仍可单独控制学生可见性，或设置定时发布。
         </p>
       </div>
 
@@ -1806,6 +2174,11 @@ export default function TeacherUpload() {
           onFiles={(files, subject) => onFiles(files, subject, defaultVisible, defaultReleaseAt)}
         />
       </Card>
+
+      <KnowledgeGraphPanel
+        subjects={aiSubjects}
+        currentSubject={currentSubject}
+      />
 
       <QuestionBankPanel
         subjects={aiSubjects}

@@ -1,14 +1,19 @@
 """知识图谱路由 —— 返回图谱数据 + 用户掌握度叠加"""
 
+import os
+import sys
+from functools import lru_cache
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from config import settings
 from database import get_db
 from models.user import User, KnowledgeState
-from routers.auth import get_current_user
+from routers.auth import get_current_user, require_user
+from services.path_planner import path_planner
 from services.neo4j_service import neo4j_service
 
 router = APIRouter(prefix="/api/graph", tags=["知识图谱"])
@@ -33,6 +38,7 @@ class GraphEdge(BaseModel):
 
 class GraphResponse(BaseModel):
     course: str
+    name: str = ""
     nodes: List[GraphNode]
     edges: List[GraphEdge]
 
@@ -42,6 +48,85 @@ class MasteryItem(BaseModel):
     mastery: float
     attempt_count: int
     correct_count: int
+
+
+class GeneratedPathItem(BaseModel):
+    id: str
+    name: str
+    category: str = ""
+    description: str = ""
+    chapter: Optional[int] = None
+    mastery: float
+    estimated_minutes: int = 30
+    difficulty: int = 3
+    status: str
+    recommended: bool = False
+
+
+class GenerateGraphRequest(BaseModel):
+    subject_id: str = Field(..., min_length=1, max_length=50)
+    subject_name: Optional[str] = Field(default=None, max_length=100)
+    source_text: str = Field(..., min_length=20, max_length=20000)
+    expected_node_count: int = Field(default=15, ge=5, le=80)
+    persist: bool = False
+
+
+class GenerateGraphResponse(BaseModel):
+    subject_id: str
+    subject_name: str
+    persisted: bool
+    node_count: int
+    edge_count: int
+    warnings: List[str] = Field(default_factory=list)
+    graph: GraphResponse
+    path_preview: List[GeneratedPathItem] = Field(default_factory=list)
+
+
+def _ensure_project_root_on_path():
+    current_dir = os.path.dirname(__file__)
+    candidate_roots = [
+        os.path.dirname(current_dir),
+        os.path.dirname(os.path.dirname(current_dir)),
+    ]
+
+    for candidate in candidate_roots:
+        if os.path.isdir(os.path.join(candidate, "ai")) and candidate not in sys.path:
+            sys.path.append(candidate)
+
+
+def require_teacher(user: User = Depends(require_user)) -> User:
+    role = (user.role or "").strip().lower()
+    if role not in {"teacher", "admin"}:
+        raise HTTPException(status_code=403, detail="仅教师或管理员可生成知识图谱")
+    return user
+
+
+@lru_cache(maxsize=1)
+def _get_generator_types():
+    _ensure_project_root_on_path()
+
+    try:
+        from ai.graph_generator import (
+            GraphGenerator,
+            GraphGeneratorInputError,
+            GraphGeneratorLLMError,
+        )
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "AI 知识图谱生成模块未安装或未复制到后端运行环境，请重新构建 backend 镜像。"
+        ) from exc
+
+    return GraphGenerator, GraphGeneratorInputError, GraphGeneratorLLMError
+
+
+@lru_cache(maxsize=1)
+def _get_generator():
+    GraphGenerator, _, _ = _get_generator_types()
+    return GraphGenerator(
+        api_base=settings.LLM_API_BASE,
+        api_key=settings.LLM_API_KEY,
+        model=settings.LLM_MODEL,
+    )
 
 
 @router.get("/{course}", response_model=GraphResponse)
@@ -84,7 +169,12 @@ def get_graph(
         for e in data.get("edges", [])
     ]
 
-    return GraphResponse(course=course, nodes=nodes, edges=edges)
+    return GraphResponse(
+        course=course,
+        name=data.get("name", course),
+        nodes=nodes,
+        edges=edges,
+    )
 
 
 @router.get("/{course}/mastery", response_model=List[MasteryItem])
@@ -115,3 +205,93 @@ def get_mastery(
         )
         for s in states
     ]
+
+
+@router.post("/generate", response_model=GenerateGraphResponse)
+async def generate_graph(
+    req: GenerateGraphRequest,
+    user: User = Depends(require_teacher),
+):
+    del user
+
+    if not settings.LLM_API_KEY:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY 未配置")
+    if not settings.LLM_MODEL:
+        raise HTTPException(status_code=503, detail="OPENAI_MODEL 未配置")
+
+    try:
+        _, GraphGeneratorInputError, GraphGeneratorLLMError = _get_generator_types()
+        generator = _get_generator()
+        result = await generator.generate_graph(
+            subject_id=req.subject_id.strip(),
+            subject_name=(req.subject_name or req.subject_id).strip(),
+            source_text=req.source_text,
+            expected_node_count=req.expected_node_count,
+        )
+    except GraphGeneratorInputError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except GraphGeneratorLLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"AI 知识图谱服务内部错误：{str(exc)}") from exc
+
+    graph_data = result["graph"]
+    subject_id = graph_data.get("course", req.subject_id.strip())
+    warnings = list(result.get("warnings", []))
+
+    mastery_map = {node["id"]: 0.3 for node in graph_data.get("nodes", [])}
+    weak_points = [(node_id, mastery) for node_id, mastery in mastery_map.items()]
+    path_preview = path_planner.generate_from_graph(
+        weak_points=weak_points,
+        graph_data=graph_data,
+        mastery_map=mastery_map,
+    )
+
+    persisted = False
+    if req.persist:
+        warnings.extend(
+            neo4j_service.save_knowledge_graph(subject_id, graph_data)
+        )
+        persisted = True
+
+    graph_nodes = [
+        GraphNode(
+            id=node["id"],
+            name=node.get("name", node["id"]),
+            category=node.get("category", ""),
+            difficulty=node.get("difficulty", 3),
+            chapter=node.get("chapter", 0),
+            description=node.get("description", ""),
+            estimated_minutes=node.get("estimated_minutes", 30),
+            mastery=None,
+        )
+        for node in graph_data.get("nodes", [])
+    ]
+    graph_edges = [
+        GraphEdge(
+            source=edge["from"],
+            target=edge["to"],
+            relation=edge.get("relation", "prerequisite"),
+        )
+        for edge in graph_data.get("edges", [])
+    ]
+
+    return GenerateGraphResponse(
+        subject_id=subject_id,
+        subject_name=graph_data.get("name", req.subject_name or req.subject_id),
+        persisted=persisted,
+        node_count=len(graph_nodes),
+        edge_count=len(graph_edges),
+        warnings=warnings,
+        graph=GraphResponse(
+            course=subject_id,
+            name=graph_data.get("name", req.subject_name or req.subject_id),
+            nodes=graph_nodes,
+            edges=graph_edges,
+        ),
+        path_preview=[GeneratedPathItem(**item) for item in path_preview],
+    )

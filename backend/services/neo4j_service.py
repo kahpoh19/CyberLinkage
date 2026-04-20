@@ -64,6 +64,26 @@ class Neo4jService:
             prereqs.setdefault(target, []).append(source)
         return prereqs
 
+    def save_knowledge_graph(self, course: str, data: Dict) -> List[str]:
+        """保存知识图谱到 JSON，并在可用时同步写入 Neo4j。"""
+        normalized = {
+            "course": course,
+            "name": data.get("name", course),
+            "nodes": data.get("nodes", []),
+            "edges": data.get("edges", []),
+        }
+        self._save_graph_to_json(course, normalized)
+
+        warnings: List[str] = []
+        if self.available:
+            try:
+                self._save_graph_to_neo4j(course, normalized)
+            except Exception as exc:
+                self._driver = None
+                warnings.append(f"Neo4j 同步失败，已保留 JSON 后备：{str(exc)}")
+
+        return warnings
+
     # ─── Neo4j 实现 ─────────────────────────────────────────
 
     def _get_graph_from_neo4j(self, course: str) -> Dict:
@@ -133,6 +153,59 @@ class Neo4jService:
                         if e["to"] == kp_id
                     ]
         return []
+
+    def _save_graph_to_json(self, course: str, data: Dict):
+        os.makedirs(settings.KNOWLEDGE_DATA_DIR, exist_ok=True)
+        filepath = os.path.join(settings.KNOWLEDGE_DATA_DIR, f"{course}.json")
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def _save_graph_to_neo4j(self, course: str, data: Dict):
+        with self._driver.session() as session:
+            session.run(
+                "MATCH (n:KnowledgePoint {course: $course}) DETACH DELETE n",
+                course=course,
+            )
+
+            for node in data.get("nodes", []):
+                session.run(
+                    """
+                    CREATE (n:KnowledgePoint {
+                        id: $id,
+                        name: $name,
+                        course: $course,
+                        category: $category,
+                        difficulty: $difficulty,
+                        chapter: $chapter,
+                        description: $description,
+                        estimated_minutes: $estimated_minutes
+                    })
+                    """,
+                    id=node["id"],
+                    name=node.get("name", node["id"]),
+                    course=course,
+                    category=node.get("category", ""),
+                    difficulty=node.get("difficulty", 3),
+                    chapter=node.get("chapter", 0),
+                    description=node.get("description", ""),
+                    estimated_minutes=node.get("estimated_minutes", 30),
+                )
+
+            for edge in data.get("edges", []):
+                session.run(
+                    """
+                    MATCH (a:KnowledgePoint {id: $from_id, course: $course})
+                    MATCH (b:KnowledgePoint {id: $to_id, course: $course})
+                    CREATE (a)-[:PREREQUISITE]->(b)
+                    """,
+                    from_id=edge["from"],
+                    to_id=edge["to"],
+                    course=course,
+                )
+
+            session.run(
+                "CREATE INDEX IF NOT EXISTS FOR (n:KnowledgePoint) ON (n.id, n.course)"
+            )
 
 
 # 全局单例

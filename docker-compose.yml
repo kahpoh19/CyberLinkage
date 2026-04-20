@@ -35,6 +35,7 @@ services:
       - REDIS_URL=redis://redis:6379
     volumes:
       - backend-data:/app/data
+      - ./knowledge/data:/app/knowledge/data
 
   neo4j:
     image: neo4j:5
