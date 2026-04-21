@@ -65,8 +65,15 @@ export const getProgress = (course) =>
 
 // ─── AI 答疑 ──────────────────────────────────────
 
-export const chatWithAI = (message, mode = 'socratic', history = []) =>
-  api.post('/chat', { message, mode, history })
+export const chatWithAI = (message, mode = 'socratic', history = [], options = {}) =>
+  api.post('/chat', {
+    message,
+    mode,
+    history,
+    subject_id: options.subjectId,
+    subject_label: options.subjectLabel,
+    current_topic: options.currentTopic,
+  })
 
 export const explainSandboxMechanism = (mechanismState, question = '请解释当前动画') =>
   api.post('/sandbox-ai/explain', { question, mechanism_state: mechanismState })

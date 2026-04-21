@@ -4,7 +4,7 @@ import SendOutlined from '@ant-design/icons/es/icons/SendOutlined'
 import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
 import ChatBubble from '../components/ChatBubble'
 import { chatWithAI } from '../api'
-import useUserStore from '../store/userStore'
+import useUserStore, { getSubjectChatConfig } from '../store/userStore'
 
 const { Title, Text } = Typography
 
@@ -15,12 +15,15 @@ export default function Chat() {
   const setSocraticMode = useUserStore((s) => s.setSocraticMode)
   const loading = useUserStore((s) => s.chatLoading)
   const setChatLoading = useUserStore((s) => s.setChatLoading)
+  const currentSubject = useUserStore((s) => s.currentSubject)
+  const subjects = useUserStore((s) => s.subjects)
   const [input, setInput] = useState('')
   const messagesEndRef = useRef(null)
+  const chatConfig = getSubjectChatConfig(currentSubject, subjects)
   const currentModeLabel = socraticMode ? '苏格拉底式引导' : '直接解释'
   const currentModeHint = socraticMode
-    ? 'AI 会优先通过提问和提示带你自己想出来。'
-    : 'AI 会直接讲解结论、原因和解题步骤。'
+    ? `AI 会优先通过提问和提示，帮助你自己想出 ${chatConfig.label} 问题的答案。`
+    : `AI 会直接讲解 ${chatConfig.label} 问题的结论、原因和解题步骤。`
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -44,7 +47,10 @@ export default function Chat() {
         role: m.role === 'ai' ? 'assistant' : 'user',
         content: m.content,
       }))
-      const res = await chatWithAI(text, socraticMode ? 'socratic' : 'explain', history)
+      const res = await chatWithAI(text, socraticMode ? 'socratic' : 'explain', history, {
+        subjectId: currentSubject,
+        subjectLabel: chatConfig.label,
+      })
       const aiMsg = {
         role: 'ai',
         content: res.data.response || res.data.message || '抱歉，我暂时无法回答这个问题。',
@@ -73,9 +79,10 @@ export default function Chat() {
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>
-          <RobotOutlined /> AI 答疑
+          <RobotOutlined /> {chatConfig.pageTitle}
         </Title>
         <Space direction="vertical" size={2} align="end">
+          <Text type="secondary">当前科目：{chatConfig.label}</Text>
           <Text type="secondary">当前模式：{currentModeLabel}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {currentModeHint}
@@ -112,7 +119,7 @@ export default function Chat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onPressEnter={handleSend}
-          placeholder="输入你的问题..."
+          placeholder={chatConfig.placeholder}
           size="large"
           disabled={loading}
         />

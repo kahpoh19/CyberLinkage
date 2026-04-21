@@ -26,6 +26,66 @@ def _load_prompt(filename: str) -> str:
 SOCRATIC_PROMPT = _load_prompt("socratic_tutor.txt")
 PATH_PROMPT = _load_prompt("path_explainer.txt")
 
+SUBJECT_PROFILES = {
+    "mechanics": {
+        "label": "机械原理",
+        "guidance": (
+            "- 重点解释构件、运动副、自由度、约束关系、运动传递、死点和位移曲线。\n"
+            "- 如果用户提到实战工坊，优先结合固定点、驱动点、输出点和机构运动来说明。\n"
+            "- 不要默认给出代码示例，优先解释机构含义和分析步骤。"
+        ),
+    },
+    "c_language": {
+        "label": "C 语言程序设计",
+        "guidance": (
+            "- 重点解释语法、指针、数组、函数、结构体、内存和调试思路。\n"
+            "- 如果适合，请使用 ```c 代码块给出示例代码。"
+        ),
+    },
+    "data_structure": {
+        "label": "数据结构",
+        "guidance": (
+            "- 重点解释数据结构特点、操作流程、时间复杂度和空间复杂度。\n"
+            "- 如果需要示例，可以使用伪代码或简洁代码说明，但不要只给结论。"
+        ),
+    },
+    "calculus": {
+        "label": "高等数学",
+        "guidance": (
+            "- 重点解释定义、推导逻辑、公式适用条件和解题思路。\n"
+            "- 可以给出简洁公式，但要解释每一步为什么成立。"
+        ),
+    },
+    "aerospace": {
+        "label": "航空航天概论",
+        "guidance": (
+            "- 重点解释飞行原理、飞行器构型、任务流程和系统组成。\n"
+            "- 回答时优先讲清概念之间的关系，不要把内容写得过于抽象。"
+        ),
+    },
+    "thermo": {
+        "label": "工程热力学",
+        "guidance": (
+            "- 重点解释状态参数、热力学定律、过程分析、循环效率和能量守恒。\n"
+            "- 如果涉及公式，优先说明物理意义和适用前提。"
+        ),
+    },
+    "physics": {
+        "label": "大学物理",
+        "guidance": (
+            "- 重点解释物理图景、受力/场的关系、公式来源和单位量纲。\n"
+            "- 如果用户卡在题目上，先帮他建立模型，再代入计算。"
+        ),
+    },
+    "circuits": {
+        "label": "电路原理",
+        "guidance": (
+            "- 重点解释等效电路、KCL/KVL、相量、暂态/稳态分析和器件作用。\n"
+            "- 回答时优先说清电流电压关系和分析路径。"
+        ),
+    },
+}
+
 
 class LLMServiceError(Exception):
     """上游 LLM 服务调用失败。"""
@@ -67,6 +127,8 @@ class SocraticTutor:
         mode: str = "socratic",
         student_mastery: Dict[str, float] = None,
         current_topic: str = None,
+        subject_id: str = None,
+        subject_label: str = None,
     ) -> Dict:
         """
         与学生对话
@@ -85,10 +147,12 @@ class SocraticTutor:
             history = []
         if student_mastery is None:
             student_mastery = {}
+        subject_info = self._resolve_subject_info(subject_id, subject_label)
 
         # RAG 检索相关内容
         context_chunks = []
-        if self.rag and self.rag.ready:
+        enable_rag = subject_info["id"] in {"", "c_language"}
+        if enable_rag and self.rag and self.rag.ready:
             try:
                 context_chunks = self.rag.query(user_message, k=3)
             except Exception:
@@ -101,6 +165,7 @@ class SocraticTutor:
             context=context_text,
             mastery=student_mastery,
             topic=current_topic,
+            subject_info=subject_info,
         )
 
         # 构建消息列表
@@ -122,9 +187,15 @@ class SocraticTutor:
         context: str,
         mastery: Dict[str, float],
         topic: Optional[str],
+        subject_info: Dict[str, str],
     ) -> str:
-        generic_base = "你是 CyberLinkage 助教，一个专注于 C 语言程序设计的 AI 学习辅导老师。"
-        base = SOCRATIC_PROMPT if mode == "socratic" and SOCRATIC_PROMPT else generic_base
+        subject_name = subject_info["label"]
+        generic_base = f"你是 CyberLinkage 助教，一个专注于 {subject_name} 的 AI 学习辅导老师。"
+        base = (
+            SOCRATIC_PROMPT
+            if mode == "socratic" and subject_info["id"] == "c_language" and SOCRATIC_PROMPT
+            else generic_base
+        )
 
         mode_instruction = ""
         if mode == "socratic":
@@ -149,12 +220,34 @@ class SocraticTutor:
             if weak:
                 mastery_info = f"\n\n学生薄弱点：{', '.join(weak)}"
 
+        subject_context = (
+            f"\n\n【当前科目】\n"
+            f"- 当前科目：{subject_name}\n"
+            f"{subject_info['guidance']}"
+        )
         topic_info = f"\n当前讨论知识点：{topic}" if topic else ""
 
         return (
-            f"{base}\n{mode_instruction}\n{mastery_info}\n{topic_info}\n\n"
+            f"{base}\n{subject_context}\n{mode_instruction}\n{mastery_info}\n{topic_info}\n\n"
             f"以下是相关教材内容供参考：\n{context}"
         )
+
+    def _resolve_subject_info(self, subject_id: Optional[str], subject_label: Optional[str]) -> Dict[str, str]:
+        normalized_id = (subject_id or "").strip().lower()
+        profile = SUBJECT_PROFILES.get(normalized_id, {})
+        label = (subject_label or "").strip() or profile.get("label") or "当前科目"
+        guidance = profile.get(
+            "guidance",
+            (
+                "- 请围绕当前科目回答，不要默认切换到 C 语言或编程语境。\n"
+                "- 优先解释概念、原理、步骤和常见误区，并根据用户问题给出对应示例。"
+            ),
+        )
+        return {
+            "id": normalized_id,
+            "label": label,
+            "guidance": guidance,
+        }
 
     async def _call_llm(self, messages: List[Dict]) -> str:
         """调用 LLM API"""

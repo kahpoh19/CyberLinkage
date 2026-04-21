@@ -1356,16 +1356,62 @@ const staticCurveData = useMemo(() => {
     transition: 'all 0.15s',
   })
 
+  const aiPanelCardStyle = {
+    ...glass,
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+  }
+
+  const aiPanelTitleStyle = {
+    fontSize: 10,
+    fontWeight: 500,
+    color: textSec,
+    letterSpacing: '0.07em',
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  }
+
+  const aiPanelIntroStyle = {
+    fontSize: 12,
+    color: textSec,
+    lineHeight: 1.6,
+    minHeight: 56,
+  }
+
+  const aiPanelTextareaStyle = {
+    width: '100%',
+    marginTop: 10,
+    resize: 'vertical',
+    background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+    border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`,
+    borderRadius: 8,
+    padding: '9px 10px',
+    color: textPri,
+    fontSize: 12,
+    lineHeight: 1.6,
+    outline: 'none',
+  }
+
+  const aiPanelResultStyle = {
+    marginTop: 10,
+    padding: '10px 12px',
+    borderRadius: 10,
+    minHeight: 120,
+    background: isDark ? 'rgba(8,12,20,0.48)' : 'rgba(248,250,252,0.95)',
+    border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)'}`,
+  }
+
   const aiWorkspacePanels = (
     <div style={{
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
       gap: 12,
-      alignItems: 'start',
+      alignItems: 'stretch',
     }}>
-      <div style={{ ...glass }}>
-        <div style={{ fontSize: 10, fontWeight: 500, color: textSec, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>AI 动画解释</div>
-        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
+      <div style={aiPanelCardStyle}>
+        <div style={aiPanelTitleStyle}>AI 动画解释</div>
+        <div style={aiPanelIntroStyle}>
           AI 会读取当前节点、连杆、驱动角度、死点状态和位移曲线采样，解释这个机构现在是怎么动的。
         </div>
 
@@ -1408,13 +1454,7 @@ const staticCurveData = useMemo(() => {
           }}
           placeholder="也可以继续追问，例如：为什么输出点在 180° 附近速度变慢？"
           rows={4}
-          style={{
-            width: '100%', marginTop: 10, resize: 'vertical',
-            background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-            border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`,
-            borderRadius: 8, padding: '9px 10px', color: textPri, fontSize: 12, lineHeight: 1.6,
-            outline: 'none',
-          }}
+          style={aiPanelTextareaStyle}
         />
 
         <button
@@ -1449,11 +1489,7 @@ const staticCurveData = useMemo(() => {
           </div>
         )}
 
-        <div style={{
-          marginTop: 10, padding: '10px 12px', borderRadius: 10, minHeight: 120,
-          background: isDark ? 'rgba(8,12,20,0.48)' : 'rgba(248,250,252,0.95)',
-          border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)'}`,
-        }}>
+        <div style={aiPanelResultStyle}>
           {aiLastQuestion && (
             <div style={{ fontSize: 11, color: textSec, marginBottom: 8 }}>
               最近问题：{aiLastQuestion}
@@ -1467,9 +1503,9 @@ const staticCurveData = useMemo(() => {
         </div>
       </div>
 
-      <div style={{ ...glass }}>
-        <div style={{ fontSize: 10, fontWeight: 500, color: textSec, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>AI 场景布置</div>
-        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
+      <div style={aiPanelCardStyle}>
+        <div style={aiPanelTitleStyle}>AI 场景布置</div>
+        <div style={aiPanelIntroStyle}>
           用自然语言描述你想要的机构，AI 会生成一个受约束的场景并直接加载到画布。
         </div>
 
@@ -1508,13 +1544,7 @@ const staticCurveData = useMemo(() => {
           }}
           placeholder="例如：生成一个四连杆机构，机架水平，两端固定，中间一个驱动曲柄，输出点在右上方。"
           rows={4}
-          style={{
-            width: '100%', marginTop: 10, resize: 'vertical',
-            background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-            border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`,
-            borderRadius: 8, padding: '9px 10px', color: textPri, fontSize: 12, lineHeight: 1.6,
-            outline: 'none',
-          }}
+          style={aiPanelTextareaStyle}
         />
 
         <button
@@ -1541,11 +1571,7 @@ const staticCurveData = useMemo(() => {
         )}
 
         {(sceneName || sceneWarnings.length > 0) && (
-          <div style={{
-            marginTop: 10, padding: '10px 12px', borderRadius: 10,
-            background: isDark ? 'rgba(8,12,20,0.48)' : 'rgba(248,250,252,0.95)',
-            border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)'}`,
-          }}>
+          <div style={aiPanelResultStyle}>
             {sceneName && (
               <div style={{ fontSize: 12, color: textPri, fontWeight: 600, marginBottom: sceneWarnings.length > 0 ? 8 : 0 }}>
                 已加载：{sceneName}
@@ -1812,8 +1838,6 @@ const staticCurveData = useMemo(() => {
             </div>
           </div>
 
-          {aiWorkspacePanels}
-
           {/* Fix 1: Displacement chart with dimension toggle and fixed 0-360° x-axis */}
           <div style={{ ...glass }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -1906,6 +1930,8 @@ const staticCurveData = useMemo(() => {
               )}
             </div>
           </div>
+
+          {aiWorkspacePanels}
         </div>
 
         {/* Right column */}
@@ -2184,7 +2210,7 @@ const staticCurveData = useMemo(() => {
           </div>
 
           {/* Help */}
-          <div style={{ ...glass, fontSize: 11, lineHeight: 1.85, color: textSec, marginTop: 'auto' }}>
+          <div style={{ ...glass, fontSize: 11, lineHeight: 1.85, color: textSec }}>
             <div style={{ color: textPri, fontWeight: 500, marginBottom: 6 }}>操作说明</div>
             <div>S — 选择/拖拽节点</div>
             <div>A — 添加旋转节点</div>

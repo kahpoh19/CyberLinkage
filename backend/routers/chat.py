@@ -36,6 +36,8 @@ class ChatRequest(BaseModel):
     history: List[ChatMessage] = Field(default_factory=list)
     student_mastery: Dict[str, float] = Field(default_factory=dict)
     current_topic: Optional[str] = None
+    subject_id: Optional[str] = None
+    subject_label: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -84,6 +86,8 @@ async def chat(req: ChatRequest):
             mode=req.mode,
             student_mastery=req.student_mastery,
             current_topic=req.current_topic,
+            subject_id=req.subject_id,
+            subject_label=req.subject_label,
         )
     except LLMServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
