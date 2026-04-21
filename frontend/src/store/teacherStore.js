@@ -14,6 +14,17 @@ const LS_KEY = 'cyberlinkage_teacher_files_v2'
 // In-memory blob registry: id → { blob: File, objectUrl: string }
 const blobRegistry = new Map()
 
+function normalizeSubjectId(subjectId) {
+  return subjectId === 'math' ? 'calculus' : subjectId
+}
+
+function normalizeFileMeta(file) {
+  return {
+    ...file,
+    subject: normalizeSubjectId(file.subject),
+  }
+}
+
 // ── localStorage helpers ─────────────────────────────────────────
 
 function loadMeta() {
@@ -22,7 +33,7 @@ function loadMeta() {
     if (!raw) return []
     const rows = JSON.parse(raw)
     // On reload all blobs are gone — reflect that in the flag
-    return rows.map(r => ({ ...r, _blobAvailable: false }))
+    return rows.map(r => ({ ...normalizeFileMeta(r), _blobAvailable: false }))
   } catch {
     return []
   }
@@ -31,7 +42,7 @@ function loadMeta() {
 function saveMeta(files) {
   try {
     const safe = files.map(({ _blobAvailable, ...rest }) => ({
-      ...rest,
+      ...normalizeFileMeta(rest),
       _blobAvailable: false,   // blobs don't survive serialisation
     }))
     localStorage.setItem(LS_KEY, JSON.stringify(safe))
@@ -67,13 +78,13 @@ const useTeacherStore = create((set, get) => ({
   // ── CRUD ───────────────────────────────────────────────────────
 
   addFile(meta) {
-    set(s => ({ files: [meta, ...s.files] }))
+    set(s => ({ files: [normalizeFileMeta(meta), ...s.files] }))
     get()._save()
   },
 
   updateFile(id, patch) {
     set(s => ({
-      files: s.files.map(f => f.id === id ? { ...f, ...patch } : f),
+      files: s.files.map(f => (f.id === id ? normalizeFileMeta({ ...f, ...patch }) : f)),
     }))
     get()._save()
   },

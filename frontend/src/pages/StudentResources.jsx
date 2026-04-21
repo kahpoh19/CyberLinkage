@@ -11,17 +11,7 @@ import useTeacherStore from '../store/teacherStore'
 import { filterFilesForStudent } from '../hooks/useFileAccess'
 import useUserStore from '../store/userStore'
 
-// ── Subject catalogue (must match TeacherUpload.jsx) ─────────────────────────
-const SUBJECTS = [
-  { id: 'all',        label: '全部'           },
-  { id: 'c_language', label: 'C 语言程序设计'  },
-  { id: 'aerospace',  label: '航空航天概论'     },
-  { id: 'thermo',     label: '工程热力学'       },
-  { id: 'math',       label: '高等数学'         },
-  { id: 'physics',    label: '大学物理'         },
-  { id: 'circuits',   label: '电路原理'         },
-]
-const SUBJECT_MAP = Object.fromEntries(SUBJECTS.map(s => [s.id, s.label]))
+const ALL_SUBJECT_OPTION = { id: 'all', label: '全部' }
 
 const fmtSz = b =>
   b < 1024 ? `${b} B` :
@@ -174,10 +164,10 @@ function ActionBtn({ onClick, title, hue, children }) {
 }
 
 // ── Subject tabs ──────────────────────────────────────────────────────────────
-function SubjectTabs({ active, onChange, counts }) {
+function SubjectTabs({ active, onChange, counts, subjects }) {
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '4px 0', marginBottom: 20 }}>
-      {SUBJECTS.map(s => {
+      {subjects.map(s => {
         const isActive = s.id === active
         const count =
           s.id === 'all'
@@ -263,7 +253,7 @@ function ParseBadge({ status }) {
 }
 
 // ── File row ──────────────────────────────────────────────────────────────────
-function FileRow({ item, onPreview, onDownload }) {
+function FileRow({ item, onPreview, onDownload, subjectMap }) {
   return (
     <div
       className="sr-row-wrap"
@@ -316,7 +306,7 @@ function FileRow({ item, onPreview, onDownload }) {
           color: '#38bdf8', whiteSpace: 'nowrap', maxWidth: 80,
           overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
-          {SUBJECT_MAP[item.subject] || item.subject}
+          {subjectMap[item.subject] || item.subject}
         </span>
       </div>
 
@@ -346,11 +336,11 @@ function FileRow({ item, onPreview, onDownload }) {
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
-function EmptyState({ subject }) {
+function EmptyState({ subject, subjectMap }) {
   const label =
     subject === 'all'
       ? '暂无老师分享的资料'
-      : `「${SUBJECT_MAP[subject] || subject}」暂无可用资料`
+      : `「${subjectMap[subject] || subject}」暂无可用资料`
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
@@ -394,10 +384,19 @@ function StatsBar({ files }) {
 export default function StudentResources() {
   const files       = useTeacherStore(s => s.files)
   const getBlobUrl  = useTeacherStore(s => s.getBlobUrl)
+  const subjects    = useUserStore(s => s.subjects)
 
   const [activeTab, setActiveTab] = useState('all')
   const [search, setSearch]       = useState('')
   const [tick, setTick]           = useState(Date.now())
+  const subjectOptions = useMemo(
+    () => [ALL_SUBJECT_OPTION, ...subjects.filter(subject => subject.id !== 'all')],
+    [subjects],
+  )
+  const subjectMap = useMemo(
+    () => Object.fromEntries(subjectOptions.map(subject => [subject.id, subject.label])),
+    [subjectOptions],
+  )
 
   // Inject CSS on every render (idempotent)
   useEffect(() => { injectCSS() })
@@ -407,6 +406,12 @@ export default function StudentResources() {
     const id = setInterval(() => setTick(Date.now()), 60_000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    if (activeTab !== 'all' && !subjectOptions.some(subject => subject.id === activeTab)) {
+      setActiveTab('all')
+    }
+  }, [activeTab, subjectOptions])
 
   // ── Core filter: only visible + released files ──────────────────────────────
   const visibleFiles = useMemo(
@@ -507,7 +512,7 @@ export default function StudentResources() {
       </div>
 
       {/* Subject tabs */}
-      <SubjectTabs active={activeTab} onChange={setActiveTab} counts={subjectCounts} />
+      <SubjectTabs active={activeTab} onChange={setActiveTab} counts={subjectCounts} subjects={subjectOptions} />
 
       {/* File list card */}
       <div style={{
@@ -525,7 +530,7 @@ export default function StudentResources() {
           }}>
             {activeTab === 'all'
               ? `资料列表（${displayFiles.length}）`
-              : `${SUBJECT_MAP[activeTab]}（${displayFiles.length}）`}
+              : `${subjectMap[activeTab] || activeTab}（${displayFiles.length}）`}
           </span>
           {search && displayFiles.length === 0 && (
             <span style={{ fontSize: 12, color: 'var(--sr-text-sub)' }}>
@@ -537,7 +542,7 @@ export default function StudentResources() {
         {displayFiles.length > 0 && <StatsBar files={displayFiles} />}
 
         {displayFiles.length === 0 ? (
-          <EmptyState subject={activeTab} />
+          <EmptyState subject={activeTab} subjectMap={subjectMap} />
         ) : (
           <>
             <TableHeader />
@@ -545,6 +550,7 @@ export default function StudentResources() {
               <FileRow
                 key={item.id}
                 item={item}
+                subjectMap={subjectMap}
                 onPreview={handlePreview}
                 onDownload={handleDownload}
               />

@@ -16,18 +16,7 @@ import { generateKnowledgeGraph, generateQuestionBank, getGraph } from '../api'
 import useTeacherStore from '../store/teacherStore'
 import useUserStore from '../store/userStore'
 
-// ── Subject catalogue ─────────────────────────────────────────────
-export const SUBJECTS = [
-  { id: 'all',        label: '全部'           },
-  { id: 'c_language', label: 'C 语言程序设计'  },
-  { id: 'aerospace',  label: '航空航天概论'     },
-  { id: 'thermo',     label: '工程热力学'       },
-  { id: 'math',       label: '高等数学'         },
-  { id: 'physics',    label: '大学物理'         },
-  { id: 'circuits',   label: '电路原理'         },
-]
-
-const SUBJECT_MAP = Object.fromEntries(SUBJECTS.map(s => [s.id, s.label]))
+const ALL_SUBJECT_OPTION = { id: 'all', label: '全部' }
 
 // ── File format config ────────────────────────────────────────────
 const ACCEPTED_EXT  = ['.pdf', '.pptx', '.docx', '.txt']
@@ -811,10 +800,10 @@ function ParseStatusBadge({ status }) {
 // ════════════════════════════════════════════════════════════════
 // SubjectTabs
 // ════════════════════════════════════════════════════════════════
-function SubjectTabs({ active, onChange, counts }) {
+function SubjectTabs({ active, onChange, counts, subjects }) {
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '4px 0', marginBottom: 20 }}>
-      {SUBJECTS.map(s => {
+      {subjects.map(s => {
         const isActive = s.id === active
         const count    = s.id === 'all'
           ? Object.values(counts).reduce((a, b) => a + b, 0)
@@ -858,7 +847,16 @@ function SubjectTabs({ active, onChange, counts }) {
 // ════════════════════════════════════════════════════════════════
 // DropZone — enhanced with visibility toggle + DatePicker
 // ════════════════════════════════════════════════════════════════
-function DropZone({ selectedSubject, onSubjectChange, defaultVisible, onDefaultVisibleChange, defaultReleaseAt, onDefaultReleaseAtChange, onFiles }) {
+function DropZone({
+  subjects,
+  selectedSubject,
+  onSubjectChange,
+  defaultVisible,
+  onDefaultVisibleChange,
+  defaultReleaseAt,
+  onDefaultReleaseAtChange,
+  onFiles,
+}) {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef(null)
 
@@ -880,9 +878,7 @@ function DropZone({ selectedSubject, onSubjectChange, defaultVisible, onDefaultV
           suffixIcon={<span className="tu-select-chevron"><Icons.ChevronDown s={14} /></span>}
           value={selectedSubject}
           onChange={onSubjectChange}
-          options={SUBJECTS
-            .filter(s => s.id !== 'all')
-            .map(s => ({ value: s.id, label: s.label }))}
+          options={subjects.map(subject => ({ value: subject.id, label: subject.label }))}
           style={{
             width: 320,
           }}
@@ -1037,7 +1033,7 @@ function TableHeader() {
 // ════════════════════════════════════════════════════════════════
 // FileRow — enhanced with visibility switch + scheduled release
 // ════════════════════════════════════════════════════════════════
-function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt }) {
+function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt, subjectMap }) {
   const getBlobUrl = useTeacherStore(s => s.getBlobUrl)
   const [busy, setBusy]           = useState({ del: false, parse: false })
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -1120,7 +1116,7 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
           color: '#c084fc', whiteSpace: 'nowrap', maxWidth: 72,
           overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
-          {SUBJECT_MAP[item.subject] || item.subject}
+          {subjectMap[item.subject] || item.subject}
         </span>
       </div>
 
@@ -1214,8 +1210,8 @@ function FileRow({ item, onDelete, onReparse, onToggleVisible, onSetReleaseAt })
 // ════════════════════════════════════════════════════════════════
 // EmptyState
 // ════════════════════════════════════════════════════════════════
-function EmptyState({ subject }) {
-  const label = subject === 'all' ? '暂无上传文件' : `「${SUBJECT_MAP[subject]}」暂无资料`
+function EmptyState({ subject, subjectMap }) {
+  const label = subject === 'all' ? '暂无上传文件' : `「${subjectMap[subject] || subject}」暂无资料`
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '42px 0', color: 'var(--t-text-sub)' }}>
       <Icons.Empty s={46} />
@@ -2125,8 +2121,16 @@ export default function TeacherUpload() {
     [subjects],
   )
   const uploadSubjects = useMemo(
-    () => SUBJECTS.filter(subject => subject.id !== 'all'),
-    [],
+    () => subjects.filter(subject => subject.id !== 'all'),
+    [subjects],
+  )
+  const subjectOptions = useMemo(
+    () => [ALL_SUBJECT_OPTION, ...uploadSubjects],
+    [uploadSubjects],
+  )
+  const subjectMap = useMemo(
+    () => Object.fromEntries(subjectOptions.map(subject => [subject.id, subject.label])),
+    [subjectOptions],
   )
   const preferredSubjectId = useMemo(
     () => resolvePreferredSubjectId(aiSubjects, currentSubject),
@@ -2144,10 +2148,15 @@ export default function TeacherUpload() {
 
   useEffect(() => { injectCSS() })
   useEffect(() => {
-    if (!SUBJECTS.some(subject => subject.id === uploadSubject) && preferredUploadSubjectId) {
+    if (!uploadSubjects.some(subject => subject.id === uploadSubject) && preferredUploadSubjectId) {
       setUploadSubject(preferredUploadSubjectId)
     }
-  }, [preferredUploadSubjectId, uploadSubject])
+  }, [preferredUploadSubjectId, uploadSubject, uploadSubjects])
+  useEffect(() => {
+    if (activeTab !== 'all' && !subjectOptions.some(subject => subject.id === activeTab)) {
+      setActiveTab('all')
+    }
+  }, [activeTab, subjectOptions])
 
   const subjectCounts = useMemo(() => {
     const counts = {}
@@ -2225,6 +2234,7 @@ export default function TeacherUpload() {
       <Card accent="rgba(168,85,247,0.18)" mb={20}>
         <SectionLabel>上传文件</SectionLabel>
         <DropZone
+          subjects={uploadSubjects}
           selectedSubject={uploadSubject}
           onSubjectChange={setUploadSubject}
           defaultVisible={defaultVisible}
@@ -2246,7 +2256,7 @@ export default function TeacherUpload() {
       />
 
       {/* Subject filter tabs */}
-      <SubjectTabs active={activeTab} onChange={setActiveTab} counts={subjectCounts} />
+      <SubjectTabs active={activeTab} onChange={setActiveTab} counts={subjectCounts} subjects={subjectOptions} />
 
       {/* File list card */}
       <Card accent="rgba(14,165,233,0.15)" mb={0}>
@@ -2254,7 +2264,7 @@ export default function TeacherUpload() {
           <SectionLabel>
             {activeTab === 'all'
               ? `文件列表（${files.length}）`
-              : `${SUBJECT_MAP[activeTab]}（${visibleFiles.length}）`
+              : `${subjectMap[activeTab] || activeTab}（${visibleFiles.length}）`
             }
           </SectionLabel>
         </div>
@@ -2262,7 +2272,7 @@ export default function TeacherUpload() {
         {visibleFiles.length > 0 && <StatsBar files={visibleFiles} />}
 
         {visibleFiles.length === 0
-          ? <EmptyState subject={activeTab} />
+          ? <EmptyState subject={activeTab} subjectMap={subjectMap} />
           : (
             <>
               <TableHeader />
@@ -2270,6 +2280,7 @@ export default function TeacherUpload() {
                 <FileRow
                   key={item.id}
                   item={item}
+                  subjectMap={subjectMap}
                   onDelete={onDelete}
                   onReparse={onReparse}
                   onToggleVisible={onToggleVisible}
