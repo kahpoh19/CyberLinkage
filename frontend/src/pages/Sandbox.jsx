@@ -15,6 +15,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine
 } from 'recharts'
+import { explainSandboxMechanism, generateSandboxScene } from '../api'
 import useUserStore from '../store/userStore'
 import {
   solveConstraints as solverSolve,
@@ -26,6 +27,36 @@ import {
 // ─── 几何工具 ────────────────────────────────────────────────────
 
 const safeNum = (v, fb = 0) => (typeof v === 'number' && isFinite(v) ? v : fb)
+const roundMaybe = (v, digits = 3) => (typeof v === 'number' && isFinite(v) ? +v.toFixed(digits) : null)
+
+function sampleCurveForAI(points) {
+  const targetAngles = [0, 60, 120, 180, 240, 300]
+  return targetAngles.map((target) => {
+    const match = points.find(point => point && point.angle === target)
+    if (!match) return null
+    return {
+      angle: match.angle,
+      x: roundMaybe(match.x),
+      y: roundMaybe(match.y),
+    }
+  }).filter(Boolean)
+}
+
+function inferMechanismLabel(joints, links) {
+  const fixedCount = joints.filter(j => j.fixed).length
+  const drivenCount = joints.filter(j => j.driven).length
+  const sliderCount = joints.filter(j => j.constraint_type === 'SLIDER').length
+
+  if (joints.length === 4 && links.length === 3 && fixedCount >= 2 && drivenCount === 1 && sliderCount === 0) {
+    return '四连杆（推测）'
+  }
+  if (joints.length === 3 && links.length === 2 && sliderCount === 1 && drivenCount === 1) {
+    return '曲柄滑块（推测）'
+  }
+  if (sliderCount > 0 && links.length > 0) return '含滑块的自定义机构'
+  if (links.length > 0) return '自定义连杆机构'
+  return '尚未形成完整机构'
+}
 
 // Fix 4: 安全 acos — 截断输入防止 NaN
 const safeAcos = (v) => Math.acos(Math.max(-1, Math.min(1, v)))
@@ -448,6 +479,17 @@ export default function Sandbox() {
   // Fix 3: Live chart data stores both x and y
   const [liveChartData, setLiveChartData] = useState([])
   const [showInvalidOverlay, setShowInvalidOverlay] = useState(false)
+  const [aiQuestion, setAiQuestion] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiResponse, setAiResponse] = useState('')
+  const [aiError, setAiError] = useState('')
+  const [aiLastQuestion, setAiLastQuestion] = useState('')
+  const [aiExplainedKey, setAiExplainedKey] = useState('')
+  const [scenePrompt, setScenePrompt] = useState('')
+  const [sceneLoading, setSceneLoading] = useState(false)
+  const [sceneError, setSceneError] = useState('')
+  const [sceneWarnings, setSceneWarnings] = useState([])
+  const [sceneName, setSceneName] = useState('')
 
   // Sync refs
   useEffect(() => { playingRef.current = state.playing }, [state.playing])
@@ -966,6 +1008,116 @@ export default function Sandbox() {
     })
   }, [])
 
+  const applyGeneratedScene = useCallback((scene) => {
+    const rawJoints = Array.isArray(scene?.joints) ? scene.joints : []
+    const rawLinks = Array.isArray(scene?.links) ? scene.links : []
+    if (!rawJoints.length || !rawLinks.length) {
+      throw new Error('AI 返回的机构场景不完整。')
+    }
+
+    _idSeq = 1
+    trailRef.current = {}
+    thetaRef.current = (((safeNum(scene?.theta_deg, 0) % 360) + 360) % 360) * Math.PI / 180
+    playingRef.current = false
+    prevPosRef.current = {}
+    deadPointRef.current = false
+    selectedRef.current = []
+    setLocked(false)
+    setShowInvalidOverlay(false)
+    setLiveChartData([])
+    prevStaticCurve.current = []
+    setAiResponse('')
+    setAiError('')
+    setAiLastQuestion('')
+    setAiExplainedKey('')
+
+    const jointIdMap = {}
+    const joints = rawJoints.map((joint) => {
+      const nextId = newId()
+      jointIdMap[joint.id] = nextId
+
+      const normalized = {
+        id: nextId,
+        x: safeNum(joint.x, 0),
+        y: safeNum(joint.y, 0),
+      }
+
+      if (joint.fixed) normalized.fixed = true
+      if (joint.output) normalized._isOutput = true
+
+      if (joint.constraint_type === 'SLIDER') {
+        const angle = (safeNum(joint.axis_angle_deg, 0) * Math.PI) / 180
+        normalized.constraintType = 'SLIDER'
+        normalized._axisDir = { x: Math.cos(angle), y: Math.sin(angle) }
+        normalized._axisOrigin = {
+          x: safeNum(joint.axis_origin_x, normalized.x),
+          y: safeNum(joint.axis_origin_y, normalized.y),
+        }
+      }
+
+      return normalized
+    })
+
+    joints.forEach((joint, index) => {
+      const rawJoint = rawJoints[index]
+      if (!rawJoint?.driven) return
+      joint.driven = true
+      joint.fixed = false
+      joint.pivotId = rawJoint.pivot_id ? jointIdMap[rawJoint.pivot_id] : null
+    })
+
+    joints.forEach((joint, index) => {
+      const rawJoint = rawJoints[index]
+      if (!joint.driven || !joint.pivotId) return
+      const pivot = joints.find(item => item.id === joint.pivotId)
+      const givenRadius = safeNum(rawJoint?.radius, 0)
+      joint.radius = givenRadius > 0 ? givenRadius : (pivot ? dist2D(joint, pivot) : undefined)
+    })
+
+    const links = rawLinks.map((link) => {
+      const aId = jointIdMap[link.a_id]
+      const bId = jointIdMap[link.b_id]
+      if (!aId || !bId || aId === bId) return null
+
+      const ja = joints.find(item => item.id === aId)
+      const jb = joints.find(item => item.id === bId)
+      if (!ja || !jb) return null
+
+      const length = safeNum(link.length, dist2D(ja, jb))
+      if (!(length > 0)) return null
+
+      return {
+        id: newId(),
+        aId,
+        bId,
+        length,
+      }
+    }).filter(Boolean)
+
+    const driven = joints.find(joint => joint.driven && joint.pivotId)
+    if (driven) {
+      const pivot = joints.find(joint => joint.id === driven.pivotId)
+      if (pivot && safeNum(driven.radius, 0) > 0) {
+        driven.x = pivot.x + driven.radius * Math.cos(thetaRef.current)
+        driven.y = pivot.y + driven.radius * Math.sin(thetaRef.current)
+      }
+    }
+
+    try {
+      const idxMap = buildIdxMap(joints)
+      solverSolve(joints, links, idxMap, 80, 0.15)
+    } catch {
+      // 静默容错，仍然允许用户继续手动调整
+    }
+
+    jointsRef.current = joints
+    linksRef.current = links
+    dispatch({ type: 'LOAD_PRESET', joints, links })
+    dispatch({ type: 'SET_THETA', payload: thetaRef.current })
+    dispatch({ type: 'SET_PLAYING', payload: false })
+    dispatch({ type: 'SET_DEAD_POINT', payload: false })
+  }, [])
+
   // Fix 1: Full 0-360° static curve for lock mode
   const outputJoint = state.joints.find(j => j._isOutput)
   const drivenJoint = state.joints.find(j => j.driven)
@@ -1001,6 +1153,8 @@ const staticCurveData = useMemo(() => {
   const chartKey = chartDimension  // y-axis key to plot
 
   const currentAngleDeg = Math.round((thetaRef.current * 180) / Math.PI) % 360
+  const sandboxAIStateKey = `${jointSnapshot}|${linkSnapshot}|${currentAngleDeg}|${state.deadPoint}|${state.speed.toFixed(1)}`
+  const aiNeedsRefresh = !!aiResponse && !!aiExplainedKey && aiExplainedKey !== sandboxAIStateKey && !state.playing
 
   // ── DOF ───────────────────────────────────────────────────────
 
@@ -1027,6 +1181,125 @@ const staticCurveData = useMemo(() => {
   const selItem  = state.selected[0]
   const selJoint = selItem?.type === 'joint' ? state.joints.find(j => j && j.id === selItem.id) : null
   const selLink  = selItem?.type === 'link'  ? state.links.find(l => l && l.id === selItem.id)  : null
+
+  const buildSandboxMechanismState = useCallback(() => {
+    const liveJoints = jointsRef.current.filter(Boolean)
+    const liveLinks = linksRef.current.filter(Boolean)
+    const serializedJoints = liveJoints.map(j => ({
+      id: j.id,
+      x: roundMaybe(j.x),
+      y: roundMaybe(j.y),
+      fixed: !!j.fixed,
+      driven: !!j.driven,
+      constraint_type: j.constraintType ?? null,
+      pivot_id: j.pivotId ?? null,
+      radius: roundMaybe(j.radius),
+      output: !!j._isOutput,
+      axis_angle_deg: j._axisDir
+        ? Math.round((Math.atan2(j._axisDir.y, j._axisDir.x) * 180) / Math.PI)
+        : null,
+    }))
+    const serializedLinks = liveLinks.map(l => ({
+      id: l.id,
+      a_id: l.aId,
+      b_id: l.bId,
+      length: roundMaybe(l.length),
+    }))
+    const liveOutput = liveJoints.find(j => j && j._isOutput)
+    const liveDriven = liveJoints.find(j => j && j.driven)
+
+    return {
+      joints: serializedJoints,
+      links: serializedLinks,
+      playing: !!playingRef.current,
+      speed: roundMaybe(speedRef.current, 2) ?? 1,
+      theta_deg: currentAngleDeg,
+      dead_point: !!deadPointRef.current,
+      dof,
+      chart_dimension: chartDimension,
+      output_joint: liveOutput ? {
+        id: liveOutput.id,
+        x: roundMaybe(liveOutput.x),
+        y: roundMaybe(liveOutput.y),
+      } : null,
+      driven_joint_id: liveDriven?.id ?? null,
+      selected_items: selectedRef.current.map(item => ({ ...item })),
+      curve_samples: sampleCurveForAI(staticCurveData),
+      summary: {
+        mechanism_guess: inferMechanismLabel(serializedJoints, serializedLinks),
+        joint_count: serializedJoints.length,
+        link_count: serializedLinks.length,
+        fixed_joint_ids: serializedJoints.filter(j => j.fixed).map(j => j.id),
+        driven_joint_ids: serializedJoints.filter(j => j.driven).map(j => j.id),
+        slider_joint_ids: serializedJoints.filter(j => j.constraint_type === 'SLIDER').map(j => j.id),
+        output_joint_ids: serializedJoints.filter(j => j.output).map(j => j.id),
+        current_tool: toolRef.current,
+        invalid_geometry: !!deadPointRef.current,
+      },
+    }
+  }, [chartDimension, currentAngleDeg, dof, staticCurveData])
+
+  const handleExplainSandbox = useCallback(async (presetQuestion = '') => {
+    if (!jointsRef.current.length) {
+      setAiError('请先在画布中创建或加载一个机构，再让 AI 解释。')
+      return
+    }
+
+    const question = (presetQuestion || aiQuestion).trim()
+      || '请解释当前机构的运动方式，并指出驱动点、输出点和位移趋势。'
+
+    setAiLoading(true)
+    setAiError('')
+
+    try {
+      const mechanismState = buildSandboxMechanismState()
+      const res = await explainSandboxMechanism(mechanismState, question)
+      setAiResponse(res.data?.response || 'AI 暂时没有返回解释。')
+      setAiLastQuestion(question)
+      setAiExplainedKey(sandboxAIStateKey)
+    } catch (e) {
+      const detail =
+        e.response?.data?.detail ||
+        e.response?.data?.message ||
+        e.response?.data?.response ||
+        e.message ||
+        '网络错误，请稍后重试。'
+      setAiError(detail)
+    } finally {
+      setAiLoading(false)
+    }
+  }, [aiQuestion, buildSandboxMechanismState, sandboxAIStateKey])
+
+  const handleGenerateScene = useCallback(async (presetDescription = '') => {
+    const description = (presetDescription || scenePrompt).trim()
+    if (!description) {
+      setSceneError('请先输入机构描述，再让 AI 布置场景。')
+      return
+    }
+
+    setSceneLoading(true)
+    setSceneError('')
+    setSceneWarnings([])
+
+    try {
+      const res = await generateSandboxScene(description)
+      const scene = res.data?.scene
+      applyGeneratedScene(scene)
+      setSceneName(scene?.name || 'AI 生成机构')
+      setSceneWarnings(Array.isArray(res.data?.warnings) ? res.data.warnings : [])
+      setAiQuestion('请解释这个新生成的机构，并指出驱动点、输出点和运动趋势。')
+    } catch (e) {
+      const detail =
+        e.response?.data?.detail ||
+        e.response?.data?.message ||
+        e.response?.data?.response ||
+        e.message ||
+        '网络错误，请稍后重试。'
+      setSceneError(detail)
+    } finally {
+      setSceneLoading(false)
+    }
+  }, [applyGeneratedScene, scenePrompt])
 
   const makeDriven = useCallback((joint) => {
     const pivot = jointsRef.current.find(j => j && j.id !== joint.id && j.fixed)
@@ -1082,6 +1355,218 @@ const staticCurveData = useMemo(() => {
       : '0.5px solid transparent',
     transition: 'all 0.15s',
   })
+
+  const aiWorkspacePanels = (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+      gap: 12,
+      alignItems: 'start',
+    }}>
+      <div style={{ ...glass }}>
+        <div style={{ fontSize: 10, fontWeight: 500, color: textSec, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>AI 动画解释</div>
+        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
+          AI 会读取当前节点、连杆、驱动角度、死点状态和位移曲线采样，解释这个机构现在是怎么动的。
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button
+            onClick={() => handleExplainSandbox('请解释当前机构的运动方式，并指出驱动点、输出点和位移趋势。')}
+            disabled={aiLoading}
+            style={{
+              flex: 1, padding: '8px 10px', borderRadius: 8, cursor: aiLoading ? 'wait' : 'pointer',
+              fontSize: 12, fontWeight: 600,
+              background: 'rgba(59,130,246,0.15)', color: '#60a5fa',
+              border: '0.5px solid rgba(96,165,250,0.35)', opacity: aiLoading ? 0.65 : 1,
+            }}
+          >
+            {aiLoading ? '分析中...' : '解释当前动画'}
+          </button>
+          <button
+            onClick={() => handleExplainSandbox(
+              state.deadPoint
+                ? '当前机构为什么进入非法位置或死点？请指出最可能原因和调整建议。'
+                : '请检查当前机构是否存在潜在死点、过约束或非法位置风险，并给出调整建议。'
+            )}
+            disabled={aiLoading}
+            style={{
+              flex: 1, padding: '8px 10px', borderRadius: 8, cursor: aiLoading ? 'wait' : 'pointer',
+              fontSize: 12, fontWeight: 600,
+              background: 'rgba(251,146,60,0.15)', color: '#fb923c',
+              border: '0.5px solid rgba(251,146,60,0.35)', opacity: aiLoading ? 0.65 : 1,
+            }}
+          >
+            分析风险
+          </button>
+        </div>
+
+        <textarea
+          value={aiQuestion}
+          onChange={e => {
+            setAiQuestion(e.target.value)
+            if (aiError) setAiError('')
+          }}
+          placeholder="也可以继续追问，例如：为什么输出点在 180° 附近速度变慢？"
+          rows={4}
+          style={{
+            width: '100%', marginTop: 10, resize: 'vertical',
+            background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+            border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`,
+            borderRadius: 8, padding: '9px 10px', color: textPri, fontSize: 12, lineHeight: 1.6,
+            outline: 'none',
+          }}
+        />
+
+        <button
+          onClick={() => handleExplainSandbox()}
+          disabled={aiLoading}
+          style={{
+            width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8,
+            background: isDark ? 'rgba(34,197,94,0.16)' : 'rgba(22,163,74,0.12)',
+            color: isDark ? '#4ade80' : '#15803d',
+            border: `0.5px solid ${isDark ? 'rgba(74,222,128,0.35)' : 'rgba(21,128,61,0.28)'}`,
+            cursor: aiLoading ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, opacity: aiLoading ? 0.7 : 1,
+          }}
+        >
+          {aiLoading ? 'AI 正在读取当前机构...' : '发送当前问题'}
+        </button>
+
+        {aiNeedsRefresh && (
+          <div style={{
+            marginTop: 10, padding: '6px 8px', borderRadius: 8, fontSize: 11,
+            background: 'rgba(251,191,36,0.10)', border: '0.5px solid rgba(251,191,36,0.25)', color: '#fbbf24',
+          }}>
+            当前机构状态已变化，建议重新解释一次。
+          </div>
+        )}
+
+        {aiError && (
+          <div style={{
+            marginTop: 10, padding: '8px 10px', borderRadius: 8, fontSize: 11, lineHeight: 1.6,
+            background: 'rgba(239,68,68,0.10)', border: '0.5px solid rgba(239,68,68,0.25)', color: '#f87171',
+          }}>
+            {aiError}
+          </div>
+        )}
+
+        <div style={{
+          marginTop: 10, padding: '10px 12px', borderRadius: 10, minHeight: 120,
+          background: isDark ? 'rgba(8,12,20,0.48)' : 'rgba(248,250,252,0.95)',
+          border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)'}`,
+        }}>
+          {aiLastQuestion && (
+            <div style={{ fontSize: 11, color: textSec, marginBottom: 8 }}>
+              最近问题：{aiLastQuestion}
+            </div>
+          )}
+          <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: aiResponse ? textPri : textSec, lineHeight: 1.75 }}>
+            {aiLoading
+              ? 'AI 正在结合当前机构状态分析，请稍候...'
+              : aiResponse || '点击“解释当前动画”后，这里会显示对机构运动、驱动传递和异常风险的解释。'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ ...glass }}>
+        <div style={{ fontSize: 10, fontWeight: 500, color: textSec, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>AI 场景布置</div>
+        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
+          用自然语言描述你想要的机构，AI 会生成一个受约束的场景并直接加载到画布。
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button
+            onClick={() => handleGenerateScene('请生成一个稳定的四连杆机构，两个固定铰点水平放置，包含一个曲柄驱动点和一个输出点。')}
+            disabled={sceneLoading}
+            style={{
+              flex: 1, padding: '8px 10px', borderRadius: 8, cursor: sceneLoading ? 'wait' : 'pointer',
+              fontSize: 12, fontWeight: 600,
+              background: 'rgba(167,139,250,0.14)', color: '#a78bfa',
+              border: '0.5px solid rgba(167,139,250,0.35)', opacity: sceneLoading ? 0.65 : 1,
+            }}
+          >
+            生成四连杆
+          </button>
+          <button
+            onClick={() => handleGenerateScene('请生成一个曲柄滑块机构，包含一个固定支点、一个曲柄驱动点、一个水平滑块和一个输出点。')}
+            disabled={sceneLoading}
+            style={{
+              flex: 1, padding: '8px 10px', borderRadius: 8, cursor: sceneLoading ? 'wait' : 'pointer',
+              fontSize: 12, fontWeight: 600,
+              background: 'rgba(34,197,94,0.14)', color: '#4ade80',
+              border: '0.5px solid rgba(74,222,128,0.35)', opacity: sceneLoading ? 0.65 : 1,
+            }}
+          >
+            生成曲柄滑块
+          </button>
+        </div>
+
+        <textarea
+          value={scenePrompt}
+          onChange={e => {
+            setScenePrompt(e.target.value)
+            if (sceneError) setSceneError('')
+          }}
+          placeholder="例如：生成一个四连杆机构，机架水平，两端固定，中间一个驱动曲柄，输出点在右上方。"
+          rows={4}
+          style={{
+            width: '100%', marginTop: 10, resize: 'vertical',
+            background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+            border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`,
+            borderRadius: 8, padding: '9px 10px', color: textPri, fontSize: 12, lineHeight: 1.6,
+            outline: 'none',
+          }}
+        />
+
+        <button
+          onClick={() => handleGenerateScene()}
+          disabled={sceneLoading}
+          style={{
+            width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 8,
+            background: isDark ? 'rgba(251,191,36,0.16)' : 'rgba(202,138,4,0.12)',
+            color: isDark ? '#fbbf24' : '#a16207',
+            border: `0.5px solid ${isDark ? 'rgba(251,191,36,0.35)' : 'rgba(161,98,7,0.24)'}`,
+            cursor: sceneLoading ? 'wait' : 'pointer', fontSize: 12, fontWeight: 600, opacity: sceneLoading ? 0.7 : 1,
+          }}
+        >
+          {sceneLoading ? 'AI 正在布置场景...' : '生成并加载到画布'}
+        </button>
+
+        {sceneError && (
+          <div style={{
+            marginTop: 10, padding: '8px 10px', borderRadius: 8, fontSize: 11, lineHeight: 1.6,
+            background: 'rgba(239,68,68,0.10)', border: '0.5px solid rgba(239,68,68,0.25)', color: '#f87171',
+          }}>
+            {sceneError}
+          </div>
+        )}
+
+        {(sceneName || sceneWarnings.length > 0) && (
+          <div style={{
+            marginTop: 10, padding: '10px 12px', borderRadius: 10,
+            background: isDark ? 'rgba(8,12,20,0.48)' : 'rgba(248,250,252,0.95)',
+            border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)'}`,
+          }}>
+            {sceneName && (
+              <div style={{ fontSize: 12, color: textPri, fontWeight: 600, marginBottom: sceneWarnings.length > 0 ? 8 : 0 }}>
+                已加载：{sceneName}
+              </div>
+            )}
+            {sceneWarnings.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sceneWarnings.map((warning, index) => (
+                  <div key={`${warning}-${index}`} style={{ fontSize: 11, color: textSec, lineHeight: 1.6 }}>
+                    {warning}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              sceneName && <div style={{ fontSize: 11, color: textSec }}>场景已加载，你可以继续让 AI 解释这个机构。</div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
   // ── Render ────────────────────────────────────────────────────
 
@@ -1326,6 +1811,8 @@ const staticCurveData = useMemo(() => {
               ))}
             </div>
           </div>
+
+          {aiWorkspacePanels}
 
           {/* Fix 1: Displacement chart with dimension toggle and fixed 0-360° x-axis */}
           <div style={{ ...glass }}>

@@ -68,6 +68,12 @@ export const getProgress = (course) =>
 export const chatWithAI = (message, mode = 'socratic', history = []) =>
   api.post('/chat', { message, mode, history })
 
+export const explainSandboxMechanism = (mechanismState, question = '请解释当前动画') =>
+  api.post('/sandbox-ai/explain', { question, mechanism_state: mechanismState })
+
+export const generateSandboxScene = (description) =>
+  api.post('/sandbox-ai/generate-scene', { description })
+
 // ─── AI 题库生成 ──────────────────────────────────────
 
 export const generateQuestionBank = (data) =>

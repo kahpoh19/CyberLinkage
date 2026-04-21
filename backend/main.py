@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 
 from database import engine, Base
-from routers import auth, chat, diagnosis, graph, path, profile, question_bank, report, subjects
+from routers import auth, chat, diagnosis, graph, path, profile, question_bank, report, sandbox_ai, subjects
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -97,6 +97,7 @@ app.include_router(report.router)
 app.include_router(profile.router)
 app.include_router(subjects.router)
 app.include_router(question_bank.router)
+app.include_router(sandbox_ai.router)
 
 app.mount("/uploads", StaticFiles(directory=profile.UPLOAD_DIR), name="uploads")
 
