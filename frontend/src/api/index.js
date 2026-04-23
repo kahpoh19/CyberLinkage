@@ -86,6 +86,11 @@ export const generateSandboxScene = (description) =>
 export const generateQuestionBank = (data) =>
   api.post('/question-bank/generate', data)
 
+export const persistQuestionBankQuestions = (data) =>
+  api.post('/question-bank/persist-preview', data)
+
+export const persistPreviewQuestionBank = persistQuestionBankQuestions
+
 export default api
 
 // ─── 个人信息 ──────────────────────────────────────────

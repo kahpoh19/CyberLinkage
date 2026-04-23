@@ -55,6 +55,9 @@ def ensure_learning_columns():
             if "course" not in columns:
                 conn.execute(text("ALTER TABLE exercises ADD COLUMN course VARCHAR(50)"))
                 conn.execute(text("UPDATE exercises SET course = 'c_language' WHERE course IS NULL"))
+            if "question_type" not in columns:
+                conn.execute(text("ALTER TABLE exercises ADD COLUMN question_type VARCHAR(20) DEFAULT 'single_choice'"))
+                conn.execute(text("UPDATE exercises SET question_type = 'single_choice' WHERE question_type IS NULL"))
 
         if "practice_records" in tables:
             columns = {col["name"] for col in inspector.get_columns("practice_records")}

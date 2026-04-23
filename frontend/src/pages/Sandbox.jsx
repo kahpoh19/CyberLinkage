@@ -891,8 +891,19 @@ export default function Sandbox() {
   // ── Keyboard shortcuts ────────────────────────────────────────
 
   useEffect(() => {
+    const isEditableTarget = (target) => {
+      if (!(target instanceof HTMLElement)) return false
+      const tagName = target.tagName?.toUpperCase()
+      return (
+        tagName === 'INPUT'
+        || tagName === 'TEXTAREA'
+        || tagName === 'SELECT'
+        || target.isContentEditable
+      )
+    }
+
     const onKey = (e) => {
-      if (e.target.tagName === 'INPUT') return
+      if (isEditableTarget(e.target)) return
       const key = e.key.toLowerCase()
 
       if (key === 's') { toolRef.current = 'select'; dispatch({ type: 'SET_TOOL', payload: 'select' }) }
@@ -1452,6 +1463,7 @@ const staticCurveData = useMemo(() => {
             setAiQuestion(e.target.value)
             if (aiError) setAiError('')
           }}
+          onKeyDown={e => e.stopPropagation()}
           placeholder="也可以继续追问，例如：为什么输出点在 180° 附近速度变慢？"
           rows={4}
           style={aiPanelTextareaStyle}
@@ -1542,6 +1554,7 @@ const staticCurveData = useMemo(() => {
             setScenePrompt(e.target.value)
             if (sceneError) setSceneError('')
           }}
+          onKeyDown={e => e.stopPropagation()}
           placeholder="例如：生成一个四连杆机构，机架水平，两端固定，中间一个驱动曲柄，输出点在右上方。"
           rows={4}
           style={aiPanelTextareaStyle}

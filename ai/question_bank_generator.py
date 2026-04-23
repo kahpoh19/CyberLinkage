@@ -25,6 +25,19 @@ def _load_prompt(filename: str) -> str:
 
 
 QUESTION_BANK_PROMPT = _load_prompt("question_bank_generator.txt")
+DEFAULT_QUESTION_TYPE = "single_choice"
+QUESTION_TYPE_CONFIG = {
+    "single_choice": {
+        "label": "单选题",
+        "option_keys": ["A", "B", "C", "D"],
+        "instruction": "题型必须是单选题，options 必须完整包含 A/B/C/D 四个选项，correct_answer 只能有一个，且必须是 A/B/C/D 中的一个。",
+    },
+    "true_false": {
+        "label": "判断题",
+        "option_keys": ["A", "B"],
+        "instruction": "题型必须是判断题，options 只需要包含 A/B 两个选项，建议使用“正确 / 错误”或语义等价表达，correct_answer 只能是 A 或 B。",
+    },
+}
 
 
 class QuestionBankGeneratorError(Exception):
@@ -37,6 +50,15 @@ class QuestionBankGeneratorInputError(QuestionBankGeneratorError):
 
 class QuestionBankGeneratorLLMError(QuestionBankGeneratorError):
     """上游 LLM 调用或输出格式异常。"""
+
+
+def _normalize_question_type(question_type: Optional[str]) -> str:
+    normalized = str(question_type or DEFAULT_QUESTION_TYPE).strip().lower()
+    if normalized not in QUESTION_TYPE_CONFIG:
+        raise QuestionBankGeneratorInputError(
+            "question_type 仅支持 single_choice 或 true_false"
+        )
+    return normalized
 
 
 class QuestionBankGenerator:
@@ -74,11 +96,15 @@ class QuestionBankGenerator:
         knowledge_point_ids: Optional[Sequence[str]] = None,
         questions_per_point: int = 3,
         max_points: Optional[int] = None,
+        question_type: str = DEFAULT_QUESTION_TYPE,
+        custom_instructions: Optional[str] = None,
     ) -> Dict[str, Any]:
         if questions_per_point <= 0:
             raise QuestionBankGeneratorInputError("questions_per_point 必须大于 0")
         if max_points is not None and max_points <= 0:
             raise QuestionBankGeneratorInputError("max_points 必须大于 0")
+        normalized_question_type = _normalize_question_type(question_type)
+        normalized_custom_instructions = str(custom_instructions or "").strip() or None
 
         graph = self._load_subject_graph(subject_id)
         subject_name = graph.get("name", subject_id)
@@ -108,6 +134,8 @@ class QuestionBankGenerator:
             selected_nodes=selected_nodes,
             graph=graph,
             questions_per_point=questions_per_point,
+            question_type=normalized_question_type,
+            custom_instructions=normalized_custom_instructions,
         )
 
         return {
@@ -124,6 +152,8 @@ class QuestionBankGenerator:
         selected_nodes: Sequence[Dict[str, Any]],
         graph: Dict[str, Any],
         questions_per_point: int,
+        question_type: str,
+        custom_instructions: Optional[str],
     ) -> List[Dict[str, Any]]:
         if not selected_nodes:
             return []
@@ -138,6 +168,8 @@ class QuestionBankGenerator:
                         knowledge_point=node,
                         graph=graph,
                         questions_per_point=questions_per_point,
+                        question_type=question_type,
+                        custom_instructions=custom_instructions,
                     )
                 )
             return questions
@@ -152,6 +184,8 @@ class QuestionBankGenerator:
                     knowledge_point=node,
                     graph=graph,
                     questions_per_point=questions_per_point,
+                    question_type=question_type,
+                    custom_instructions=custom_instructions,
                 )
                 return index, node_questions
 
@@ -171,6 +205,8 @@ class QuestionBankGenerator:
         knowledge_point: Dict[str, Any],
         graph: Dict[str, Any],
         questions_per_point: int = 3,
+        question_type: str = DEFAULT_QUESTION_TYPE,
+        custom_instructions: Optional[str] = None,
         max_attempts: int = 3,
     ) -> List[Dict[str, Any]]:
         kp_id = knowledge_point["id"]
@@ -190,6 +226,8 @@ class QuestionBankGenerator:
                 knowledge_point=knowledge_point,
                 prereq_names=prereq_names,
                 questions_per_point=questions_per_point,
+                question_type=question_type,
+                custom_instructions=custom_instructions,
                 retry_hint=retry_hint,
             )
             raw_text = await self._call_llm(messages, questions_per_point)
@@ -198,6 +236,7 @@ class QuestionBankGenerator:
                     raw_text=raw_text,
                     expected_knowledge_point_id=kp_id,
                     expected_count=questions_per_point,
+                    expected_question_type=question_type,
                 )
                 return questions[:questions_per_point]
             except QuestionBankGeneratorLLMError as exc:
@@ -224,12 +263,15 @@ class QuestionBankGenerator:
         knowledge_point: Dict[str, Any],
         prereq_names: Sequence[str],
         questions_per_point: int,
+        question_type: str,
+        custom_instructions: Optional[str] = None,
         retry_hint: str = "",
     ) -> List[Dict[str, str]]:
         system_prompt = QUESTION_BANK_PROMPT or (
             "你是题库生成助手，只能输出合法 JSON 数组，每个元素都是单选题对象。"
         )
         prerequisite_text = "、".join(prereq_names) if prereq_names else "无"
+        type_config = QUESTION_TYPE_CONFIG[_normalize_question_type(question_type)]
         knowledge_snapshot = json.dumps(
             {
                 "knowledge_point_id": knowledge_point.get("id"),
@@ -248,11 +290,20 @@ class QuestionBankGenerator:
         user_prompt = (
             f"请为科目“{subject_name}”（subject_id={subject_id}）的知识点"
             f"“{knowledge_point.get('name', knowledge_point.get('id'))}”"
-            f"（knowledge_point_id={knowledge_point.get('id')}）生成 {questions_per_point} 道单选题。\n"
+            f"（knowledge_point_id={knowledge_point.get('id')}）生成 {questions_per_point} 道{type_config['label']}。\n"
             f"前置知识点：{prerequisite_text}\n\n"
+            f"题型要求：{type_config['instruction']}\n"
             "请严格只返回 JSON 数组，数组长度必须与要求数量一致。\n\n"
             f"知识点上下文：\n{knowledge_snapshot}"
         )
+
+        if custom_instructions:
+            user_prompt += (
+                "\n\n老师给定的出题要求（优先级最高，请尽量逐条严格遵守）：\n"
+                f"{custom_instructions}\n"
+                "如果老师已经明确给出了题干、选项、答案或风格要求，请尽量不要改写其核心内容；"
+                "如确有冲突，应在保证返回合法 JSON 的前提下，最大程度贴合老师要求。"
+            )
 
         if retry_hint:
             user_prompt += (
@@ -300,8 +351,10 @@ class QuestionBankGenerator:
         raw_text: str,
         expected_knowledge_point_id: str,
         expected_count: int,
+        expected_question_type: str,
     ) -> List[Dict[str, Any]]:
         payload = self._extract_json_payload(raw_text)
+        normalized_question_type = _normalize_question_type(expected_question_type)
 
         if isinstance(payload, dict):
             payload = payload.get("questions")
@@ -327,11 +380,15 @@ class QuestionBankGenerator:
                 continue
             seen_question_texts.add(normalized_text)
 
-            options = self._normalize_options(item.get("options"), index)
+            question_type = _normalize_question_type(
+                item.get("question_type") or normalized_question_type
+            )
+            options = self._normalize_options(item.get("options"), index, question_type)
             correct_answer = str(item.get("correct_answer", "")).strip().upper()[:1]
-            if correct_answer not in {"A", "B", "C", "D"}:
+            if correct_answer not in QUESTION_TYPE_CONFIG[question_type]["option_keys"]:
                 raise QuestionBankGeneratorLLMError(
-                    f"第 {index} 题的 correct_answer 必须是 A/B/C/D"
+                    f"第 {index} 题的 correct_answer 必须是 "
+                    + "/".join(QUESTION_TYPE_CONFIG[question_type]["option_keys"])
                 )
 
             difficulty = item.get("difficulty", 3)
@@ -348,6 +405,7 @@ class QuestionBankGenerator:
             questions.append(
                 {
                     "knowledge_point_id": expected_knowledge_point_id,
+                    "question_type": question_type,
                     "question_text": question_text,
                     "options": options,
                     "correct_answer": correct_answer,
@@ -394,13 +452,22 @@ class QuestionBankGenerator:
             f"模型输出无法解析为 JSON: {str(last_error)}"
         ) from last_error
 
-    def _normalize_options(self, raw_options: Any, index: int) -> Dict[str, str]:
+    def _normalize_options(
+        self,
+        raw_options: Any,
+        index: int,
+        question_type: str,
+    ) -> Dict[str, str]:
+        option_keys = QUESTION_TYPE_CONFIG[_normalize_question_type(question_type)]["option_keys"]
+
         if isinstance(raw_options, list):
-            if len(raw_options) != 4:
-                raise QuestionBankGeneratorLLMError(f"第 {index} 题的 options 必须包含 4 个选项")
+            if len(raw_options) != len(option_keys):
+                raise QuestionBankGeneratorLLMError(
+                    f"第 {index} 题的 options 必须包含 {len(option_keys)} 个选项"
+                )
             option_map = {
                 label: str(value).strip()
-                for label, value in zip(["A", "B", "C", "D"], raw_options)
+                for label, value in zip(option_keys, raw_options)
             }
         elif isinstance(raw_options, dict):
             normalized_raw = {
@@ -409,14 +476,16 @@ class QuestionBankGenerator:
             }
             option_map = {
                 label: normalized_raw.get(label, "").strip()
-                for label in ["A", "B", "C", "D"]
+                for label in option_keys
             }
         else:
             raise QuestionBankGeneratorLLMError(f"第 {index} 题的 options 格式不正确")
 
-        if any(not option_map[label] for label in ["A", "B", "C", "D"]):
+        if any(not option_map[label] for label in option_keys):
             raise QuestionBankGeneratorLLMError(
-                f"第 {index} 题的 options 必须完整包含 A/B/C/D 四个非空选项"
+                f"第 {index} 题的 options 必须完整包含 "
+                + "/".join(option_keys)
+                + " 非空选项"
             )
         return option_map
 

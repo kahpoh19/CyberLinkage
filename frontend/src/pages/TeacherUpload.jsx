@@ -12,9 +12,10 @@ import React, {
 } from 'react'
 import { DatePicker, Tooltip, Select, message } from 'antd'
 import dayjs from 'dayjs'
-import { generateKnowledgeGraph, generateQuestionBank, getGraph } from '../api'
+import { generateKnowledgeGraph, generateQuestionBank, getGraph, persistPreviewQuestionBank } from '../api'
 import useTeacherStore from '../store/teacherStore'
 import useUserStore from '../store/userStore'
+import QuestionBankManager from '../components/QuestionBankManager'
 
 const ALL_SUBJECT_OPTION = { id: 'all', label: '全部' }
 
@@ -1852,6 +1853,7 @@ function QuestionBankPanel({
     && knowledgePoints.length > 0
     && (useAllKnowledgePoints || selectedKnowledgePointIds.length > 0)
     && !graphLoading
+  const hasPreviewQuestions = (result?.questions || []).length > 0
   const previewQuestions = showAllQuestions
     ? result?.questions || []
     : (result?.questions || []).slice(0, 6)
@@ -1899,6 +1901,31 @@ function QuestionBankPanel({
     subjectId,
     useAllKnowledgePoints,
   ])
+
+  const persistPreview = useCallback(async () => {
+    if (!result || !hasPreviewQuestions) {
+      message.warning('请先预览生成题目，再导入当前预览')
+      return
+    }
+
+    setRequestState('persist-preview')
+    try {
+      const response = await persistPreviewQuestionBank({
+        subject_id: result.subject_id || subjectId,
+        subject_name: result.subject_name || subjectId,
+        questions: result.questions,
+        replace_existing: replaceExisting,
+      })
+
+      setResult(response.data)
+      setShowAllQuestions((response.data.questions || []).length <= 6)
+      message.success(`已导入当前预览，成功写入 ${response.data.persisted_count} 道题`)
+    } catch (error) {
+      message.error(getApiErrorMessage(error))
+    } finally {
+      setRequestState('')
+    }
+  }, [hasPreviewQuestions, replaceExisting, result, subjectId])
 
   return (
     <Card accent="rgba(16,185,129,0.18)" mb={20}>
@@ -2047,15 +2074,32 @@ function QuestionBankPanel({
         >
           预览生成
         </GenerateButton>
-        <GenerateButton
-          onClick={() => runGeneration(true)}
-          disabled={!canSubmit}
-          busy={requestState === 'persist'}
-          accent="#22c55e"
-        >
-          生成并入库
-        </GenerateButton>
+        {hasPreviewQuestions ? (
+          <GenerateButton
+            onClick={persistPreview}
+            disabled={!hasPreviewQuestions}
+            busy={requestState === 'persist-preview'}
+            accent="#22c55e"
+          >
+            {result?.persisted_count ? '重新导入当前预览' : '导入当前预览'}
+          </GenerateButton>
+        ) : (
+          <GenerateButton
+            onClick={() => runGeneration(true)}
+            disabled={!canSubmit}
+            busy={requestState === 'persist'}
+            accent="#22c55e"
+          >
+            生成并入库
+          </GenerateButton>
+        )}
       </div>
+
+      {hasPreviewQuestions && (
+        <p style={{ fontSize: 12, color: 'var(--t-text-sub)', margin: result ? '0 0 18px' : 0, lineHeight: 1.7 }}>
+          当前可直接把这批预览题目导入题库，点击后不会再次调用 AI 重新生成。
+        </p>
+      )}
 
       {result && (
         <div style={{ marginTop: 18 }}>
@@ -2250,7 +2294,7 @@ export default function TeacherUpload() {
         currentSubject={currentSubject}
       />
 
-      <QuestionBankPanel
+      <QuestionBankManager
         subjects={aiSubjects}
         currentSubject={currentSubject}
       />
