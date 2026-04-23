@@ -80,7 +80,7 @@ const getQuestionOptionKeys = questionType =>
     ? ['A', 'B']
     : ['A', 'B', 'C', 'D']
 
-function createQuestionOptions(questionType, rawOptions = {}) {
+function createQuestionOptions(questionType, rawOptions = {}, trimValues = false) {
   const normalizedType = normalizeQuestionType(questionType)
   const optionKeys = getQuestionOptionKeys(normalizedType)
   const nextOptions = {}
@@ -89,7 +89,8 @@ function createQuestionOptions(questionType, rawOptions = {}) {
     const fallback = normalizedType === 'true_false'
       ? (index === 0 ? '正确' : '错误')
       : ''
-    nextOptions[key] = String(rawOptions?.[key] ?? rawOptions?.[key.toLowerCase()] ?? fallback).trim()
+    const resolvedValue = String(rawOptions?.[key] ?? rawOptions?.[key.toLowerCase()] ?? fallback)
+    nextOptions[key] = trimValues ? resolvedValue.trim() : resolvedValue
   })
 
   return nextOptions
@@ -103,18 +104,30 @@ function createQuestionDraft(overrides = {}) {
   const difficulty = Number.parseInt(overrides.difficulty, 10)
 
   return {
-    knowledge_point_id: String(overrides.knowledge_point_id || '').trim(),
+    knowledge_point_id: String(overrides.knowledge_point_id || ''),
     question_type: questionType,
-    question_text: String(overrides.question_text || '').trim(),
-    options: createQuestionOptions(questionType, overrides.options),
+    question_text: String(overrides.question_text || ''),
+    options: createQuestionOptions(questionType, overrides.options, false),
     correct_answer: nextCorrectAnswer,
     difficulty: Number.isNaN(difficulty) ? 3 : Math.min(5, Math.max(1, difficulty)),
-    explanation: String(overrides.explanation || '').trim(),
+    explanation: String(overrides.explanation || ''),
+  }
+}
+
+function getSanitizedQuestionDraft(question) {
+  const draft = createQuestionDraft(question)
+  return {
+    ...draft,
+    knowledge_point_id: draft.knowledge_point_id.trim(),
+    question_text: draft.question_text.trim(),
+    options: createQuestionOptions(draft.question_type, draft.options, true),
+    correct_answer: String(draft.correct_answer || '').trim().toUpperCase(),
+    explanation: draft.explanation.trim(),
   }
 }
 
 function validateQuestionDraft(question) {
-  const draft = createQuestionDraft(question)
+  const draft = getSanitizedQuestionDraft(question)
   const optionKeys = getQuestionOptionKeys(draft.question_type)
 
   if (!draft.knowledge_point_id) return '请选择题目对应的知识点'
@@ -134,7 +147,7 @@ function validateQuestionDraft(question) {
 }
 
 function sanitizeQuestionDraft(question) {
-  const draft = createQuestionDraft(question)
+  const draft = getSanitizedQuestionDraft(question)
   const validationError = validateQuestionDraft(draft)
   if (validationError) {
     throw new Error(validationError)
@@ -468,6 +481,7 @@ function QuestionEditorFields({
           disabled={disabled}
           value={question.question_text}
           onChange={event => updateDraft({ question_text: event.target.value })}
+          onKeyDown={event => event.stopPropagation()}
           style={{ ...TEXTAREA_STYLE, minHeight: 98 }}
           placeholder="请输入完整题干"
         />
@@ -493,6 +507,7 @@ function QuestionEditorFields({
                     [key]: event.target.value,
                   },
                 })}
+                onKeyDown={event => event.stopPropagation()}
                 style={INPUT_STYLE}
                 placeholder={`请输入 ${key} 选项`}
               />
@@ -524,6 +539,7 @@ function QuestionEditorFields({
           disabled={disabled}
           value={question.explanation}
           onChange={event => updateDraft({ explanation: event.target.value })}
+          onKeyDown={event => event.stopPropagation()}
           style={{ ...TEXTAREA_STYLE, minHeight: 88 }}
           placeholder="请输入解析，帮助学生复盘"
         />
@@ -841,7 +857,7 @@ function AIGenerationPanel({ subjects, currentSubject }) {
       </div>
 
       <div style={{ marginBottom: hasPreviewQuestions ? 18 : 16 }}>
-        <label style={FIELD_LABEL_STYLE}>AI 对话框 / 老师要求</label>
+        <label style={FIELD_LABEL_STYLE}>出题要求 / 给 AI 的说明</label>
         <div style={{
           padding: 14,
           borderRadius: 16,
@@ -849,9 +865,9 @@ function AIGenerationPanel({ subjects, currentSubject }) {
           background: 'linear-gradient(180deg, rgba(56,189,248,0.10), rgba(15,23,42,0.18))',
           marginBottom: 10,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#7dd3fc', marginBottom: 6 }}>你可以直接把想要的题目写给 AI</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#7dd3fc', marginBottom: 6 }}>把你想要的题目直接告诉 AI 就可以</div>
           <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--t-text-sub)' }}>
-            例如直接写题干、限定题型、要求题目难度、出题风格，甚至把你想要的选项和答案结构都写进去。AI 会优先照着老师要求生成。
+            你可以像和助教沟通一样，直接说明想考什么知识点、希望用什么题型、难度控制在什么范围，或者把你想要的题干、选项风格、答案要求写进去。AI 会尽量按你的要求先生成一版可编辑草稿。
           </div>
         </div>
         <textarea
@@ -859,7 +875,7 @@ function AIGenerationPanel({ subjects, currentSubject }) {
           onChange={event => setCustomInstructions(event.target.value)}
           onKeyDown={event => event.stopPropagation()}
           style={TEXTAREA_STYLE}
-          placeholder={'例如：\n1. 按“机械原理研究对象”这个题目风格生成。\n2. 难度控制在 1-2 星。\n3. 干扰项不要太离谱。\n4. 如果我已经给了题干或选项，请尽量不要改写。\n5. 题型保持为当前选择的题型。'}
+          placeholder={'例如：\n请围绕“程序设计概述”生成 3 道单选题。\n难度偏基础，适合大一学生。\n题干尽量简洁，干扰项要合理，不要太离谱。\n如果我已经给出题干或选项，请尽量保留原意。'}
         />
       </div>
 
