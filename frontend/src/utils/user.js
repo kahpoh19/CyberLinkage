@@ -1,4 +1,4 @@
-export const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:8000'
+export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/$/, '')
 
 export const FONT_MAP = {
     default: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
@@ -15,14 +15,20 @@ export function getRoleLabel(role) {
     return role === 'teacher' ? '教师' : '学生'
 }
 
+function resolveAssetUrl(path) {
+    if (!path) return ''
+    if (/^(https?:)?\/\//i.test(path) || path.startsWith('data:') || path.startsWith('blob:')) {
+        return path
+    }
+
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`
+    return API_ORIGIN ? `${API_ORIGIN}${normalizedPath}` : normalizedPath
+}
+
 export function getAvatarUrl(avatar) {
-    if (!avatar) return ''
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) return avatar
-    return `${API_ORIGIN}${avatar}`
+    return resolveAssetUrl(avatar)
 }
 
 export function getFileUrl(path) {
-    if (!path) return ''
-    if (path.startsWith('http://') || path.startsWith('https://')) return path
-    return `${API_ORIGIN}${path}`
+    return resolveAssetUrl(path)
 }
