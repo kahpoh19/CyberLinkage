@@ -20,12 +20,13 @@ import QuestionBankManager from '../components/QuestionBankManager'
 const ALL_SUBJECT_OPTION = { id: 'all', label: '全部' }
 
 // ── File format config ────────────────────────────────────────────
-const ACCEPTED_EXT  = ['.pdf', '.pptx', '.docx', '.txt']
+const ACCEPTED_EXT  = ['.pdf', '.pptx', '.docx', '.txt', '.md']
 const ACCEPTED_MIME = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain',
+  'text/markdown',
 ]
 
 // ── Parse status config ───────────────────────────────────────────
@@ -2222,6 +2223,10 @@ export default function TeacherUpload() {
   const onFiles = useCallback(async (rawFiles, subject, isVisible, releaseAt) => {
     for (const f of rawFiles) {
       const id   = uid()
+      const isTextLike = /\.(md|txt)$/i.test(f.name)
+      const previewText = isTextLike
+        ? (await f.text()).slice(0, 100000)
+        : ''
       const meta = {
         id,
         name:           f.name,
@@ -2232,6 +2237,7 @@ export default function TeacherUpload() {
         progress:       0,
         isVisible:      isVisible,
         releaseAt:      releaseAt || null,
+        previewText,
         _blobAvailable: false,
       }
       addFile(meta)

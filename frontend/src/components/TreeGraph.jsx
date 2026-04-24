@@ -87,9 +87,11 @@ export default function TreeGraph({ graphData, onNodeClick }) {
     }],
   }), [treeData, isDark, theme])
 
-  const handleClick = useCallback(() => {
-    // 单击节点交给 ECharts tree 自己处理展开 / 收起
-  }, [])
+  const handleClick = useCallback((params) => {
+    if (params?.data?._raw) {
+      onNodeClick?.(params.data._raw)
+    }
+  }, [onNodeClick])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -109,6 +111,7 @@ export default function TreeGraph({ graphData, onNodeClick }) {
         ref={chartRef}
         option={option}
         style={{ width: '100%', height: '100%' }}
+        onEvents={{ click: handleClick }}
         notMerge={true}
       />
     </div>

@@ -1,7 +1,8 @@
 """苏格拉底式 AI 辅导 Agent —— 引导学生自主发现答案"""
 
+import json
 import os
-from typing import Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional
 
 import httpx
 
@@ -25,6 +26,9 @@ def _load_prompt(filename: str) -> str:
 
 SOCRATIC_PROMPT = _load_prompt("socratic_tutor.txt")
 PATH_PROMPT = _load_prompt("path_explainer.txt")
+CHAT_HISTORY_ROUNDS = 6
+RAG_TOP_K = 2
+CHAT_MAX_TOKENS = 420
 
 SUBJECT_PROFILES = {
     "mechanics": {
@@ -147,19 +151,62 @@ class SocraticTutor:
             history = []
         if student_mastery is None:
             student_mastery = {}
+        messages = self._build_messages(
+            user_message=user_message,
+            history=history,
+            mode=mode,
+            student_mastery=student_mastery,
+            current_topic=current_topic,
+            subject_id=subject_id,
+            subject_label=subject_label,
+        )
+        response_text = self._format_response_text(await self._call_llm(messages))
+
+        return {
+            "response": response_text,
+            "knowledge_points": [current_topic] if current_topic else [],
+        }
+
+    async def stream_chat(
+        self,
+        user_message: str,
+        history: List[Dict] = None,
+        mode: str = "socratic",
+        student_mastery: Dict[str, float] = None,
+        current_topic: str = None,
+        subject_id: str = None,
+        subject_label: str = None,
+    ) -> AsyncIterator[str]:
+        if history is None:
+            history = []
+        if student_mastery is None:
+            student_mastery = {}
+
+        messages = self._build_messages(
+            user_message=user_message,
+            history=history,
+            mode=mode,
+            student_mastery=student_mastery,
+            current_topic=current_topic,
+            subject_id=subject_id,
+            subject_label=subject_label,
+        )
+
+        async for chunk in self._call_llm_stream(messages):
+            yield chunk
+
+    def _build_messages(
+        self,
+        user_message: str,
+        history: List[Dict],
+        mode: str,
+        student_mastery: Dict[str, float],
+        current_topic: Optional[str],
+        subject_id: Optional[str],
+        subject_label: Optional[str],
+    ) -> List[Dict[str, str]]:
         subject_info = self._resolve_subject_info(subject_id, subject_label)
-
-        # RAG 检索相关内容
-        context_chunks = []
-        enable_rag = subject_info["id"] in {"", "c_language"}
-        if enable_rag and self.rag and self.rag.ready:
-            try:
-                context_chunks = self.rag.query(user_message, k=3)
-            except Exception:
-                context_chunks = []
-        context_text = "\n\n".join(context_chunks) if context_chunks else "（暂无教材参考资料）"
-
-        # 构建系统提示
+        context_text = self._load_context_text(user_message, subject_info)
         system_prompt = self._build_system_prompt(
             mode=mode,
             context=context_text,
@@ -168,18 +215,20 @@ class SocraticTutor:
             subject_info=subject_info,
         )
 
-        # 构建消息列表
         messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(history[-10:])  # 保留最近 10 轮对话
+        messages.extend(history[-CHAT_HISTORY_ROUNDS:])
         messages.append({"role": "user", "content": user_message})
+        return messages
 
-        # 调用 LLM
-        response_text = await self._call_llm(messages)
-
-        return {
-            "response": response_text,
-            "knowledge_points": [current_topic] if current_topic else [],
-        }
+    def _load_context_text(self, user_message: str, subject_info: Dict[str, str]) -> str:
+        context_chunks = []
+        enable_rag = subject_info["id"] in {"", "c_language"}
+        if enable_rag and self.rag and self.rag.ready:
+            try:
+                context_chunks = self.rag.query(user_message, k=RAG_TOP_K)
+            except Exception:
+                context_chunks = []
+        return "\n\n".join(context_chunks) if context_chunks else "（暂无教材参考资料）"
 
     def _build_system_prompt(
         self,
@@ -226,9 +275,18 @@ class SocraticTutor:
             f"{subject_info['guidance']}"
         )
         topic_info = f"\n当前讨论知识点：{topic}" if topic else ""
+        format_instruction = (
+            "\n\n【回答格式】\n"
+            "- 必须使用 Markdown 输出\n"
+            "- 先用 1 句话给出核心判断或下一步\n"
+            "- 再用 2 到 4 个要点分段说明，避免贴成一整大段\n"
+            "- 每个要点尽量控制在 1 到 2 句，默认保持简洁，用户追问再展开\n"
+            "- 只有确实必要时才给 1 个简短代码块、公式块或示例\n"
+            "- 不要重复题面，不要写空泛套话"
+        )
 
         return (
-            f"{base}\n{subject_context}\n{mode_instruction}\n{mastery_info}\n{topic_info}\n\n"
+            f"{base}\n{subject_context}\n{mode_instruction}\n{format_instruction}\n{mastery_info}\n{topic_info}\n\n"
             f"以下是相关教材内容供参考：\n{context}"
         )
 
@@ -265,8 +323,8 @@ class SocraticTutor:
         payload = {
             "model": self.model,
             "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": 1000,
+            "temperature": 0.45,
+            "max_tokens": CHAT_MAX_TOKENS,
         }
 
         try:
@@ -276,11 +334,7 @@ class SocraticTutor:
                 data = resp.json()
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as exc:
-            detail = exc.response.text.strip()
-            if detail:
-                detail = detail[:300]
-            else:
-                detail = exc.response.reason_phrase
+            detail = self._extract_error_detail(exc.response.text, exc.response.reason_phrase)
             raise LLMServiceError(
                 f"上游 LLM 返回 {exc.response.status_code}: {detail}"
             ) from exc
@@ -288,6 +342,111 @@ class SocraticTutor:
             raise LLMServiceError(f"无法连接到上游 LLM: {str(exc)}") from exc
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMServiceError(f"上游 LLM 响应格式异常: {str(exc)}") from exc
+
+    async def _call_llm_stream(self, messages: List[Dict]) -> AsyncIterator[str]:
+        if not self.api_key:
+            raise LLMServiceError("OPENAI_API_KEY 未配置")
+
+        if not self.model:
+            raise LLMServiceError("OPENAI_MODEL 未配置")
+
+        url = f"{self.api_base.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.45,
+            "max_tokens": CHAT_MAX_TOKENS,
+            "stream": True,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=15.0)) as client:
+                async with client.stream("POST", url, json=payload, headers=headers) as resp:
+                    resp.raise_for_status()
+
+                    async for line in resp.aiter_lines():
+                        if not line:
+                            continue
+
+                        raw_line = line.strip()
+                        if raw_line.startswith("data:"):
+                            raw_line = raw_line[5:].strip()
+
+                        if raw_line == "[DONE]":
+                            break
+
+                        try:
+                            data = json.loads(raw_line)
+                        except ValueError:
+                            continue
+
+                        chunk = self._extract_stream_chunk(data)
+                        if chunk:
+                            yield chunk
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.reason_phrase
+            try:
+                raw = await exc.response.aread()
+                text = raw.decode("utf-8", errors="ignore").strip()
+                if text:
+                    detail = self._extract_error_detail(text, detail)
+            except Exception:
+                pass
+            raise LLMServiceError(
+                f"上游 LLM 返回 {exc.response.status_code}: {detail}"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise LLMServiceError(f"无法连接到上游 LLM: {str(exc)}") from exc
+
+    def _extract_stream_chunk(self, data: Dict) -> str:
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+
+        delta = choices[0].get("delta") or {}
+        content = delta.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(
+                item.get("text", "")
+                for item in content
+                if isinstance(item, dict)
+            )
+        return ""
+
+    def _format_response_text(self, text: str) -> str:
+        return "\n\n".join(
+            segment.strip()
+            for segment in text.replace("\r\n", "\n").strip().split("\n\n")
+            if segment.strip()
+        )
+
+    def _extract_error_detail(self, text: str, fallback: str) -> str:
+        raw = (text or "").strip()
+        if not raw:
+            return fallback
+
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            return raw[:300]
+
+        error = data.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            metadata = error.get("metadata")
+            if isinstance(metadata, dict) and metadata.get("raw"):
+                return str(metadata["raw"])[:300]
+            if message:
+                return str(message)[:300]
+        if isinstance(error, str):
+            return error[:300]
+        return raw[:300]
 
 
 _tutor: Optional[SocraticTutor] = None

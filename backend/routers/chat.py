@@ -6,6 +6,7 @@ from functools import lru_cache
 from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from config import settings
@@ -45,6 +46,13 @@ class ChatResponse(BaseModel):
     knowledge_points: List[str] = Field(default_factory=list)
 
 
+def _ensure_chat_available():
+    if not settings.LLM_API_KEY:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY 未配置")
+    if not settings.LLM_MODEL:
+        raise HTTPException(status_code=503, detail="OPENAI_MODEL 未配置")
+
+
 @lru_cache(maxsize=1)
 def _get_tutor_types():
     _ensure_project_root_on_path()
@@ -72,10 +80,7 @@ def _get_tutor():
 
 @router.post("", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    if not settings.LLM_API_KEY:
-        raise HTTPException(status_code=503, detail="OPENAI_API_KEY 未配置")
-    if not settings.LLM_MODEL:
-        raise HTTPException(status_code=503, detail="OPENAI_MODEL 未配置")
+    _ensure_chat_available()
 
     try:
         _, LLMServiceError = _get_tutor_types()
@@ -97,3 +102,56 @@ async def chat(req: ChatRequest):
         raise HTTPException(status_code=500, detail=f"AI 服务内部错误：{str(exc)}") from exc
 
     return ChatResponse(**result)
+
+
+@router.post("/stream")
+async def chat_stream(req: ChatRequest):
+    _ensure_chat_available()
+
+    try:
+        _, LLMServiceError = _get_tutor_types()
+        tutor = _get_tutor()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"AI 服务内部错误：{str(exc)}") from exc
+
+    async def generate():
+        yielded_any_chunk = False
+        try:
+            async for chunk in tutor.stream_chat(
+                user_message=req.message,
+                history=[msg.model_dump() for msg in req.history],
+                mode=req.mode,
+                student_mastery=req.student_mastery,
+                current_topic=req.current_topic,
+                subject_id=req.subject_id,
+                subject_label=req.subject_label,
+            ):
+                if chunk:
+                    yielded_any_chunk = True
+                    yield chunk
+        except LLMServiceError as exc:
+            if not yielded_any_chunk:
+                try:
+                    fallback = await tutor.chat(
+                        user_message=req.message,
+                        history=[msg.model_dump() for msg in req.history],
+                        mode=req.mode,
+                        student_mastery=req.student_mastery,
+                        current_topic=req.current_topic,
+                        subject_id=req.subject_id,
+                        subject_label=req.subject_label,
+                    )
+                    response_text = (fallback.get("response") or "").strip()
+                    if response_text:
+                        yield response_text
+                        yield f"\n\n> 注：流式通道暂时不可用，已自动切换为普通回答。"
+                        return
+                except Exception:
+                    pass
+            yield f"\n\n> ⚠️ {str(exc)}"
+        except Exception as exc:
+            yield f"\n\n> ⚠️ AI 服务内部错误：{str(exc)}"
+
+    return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")

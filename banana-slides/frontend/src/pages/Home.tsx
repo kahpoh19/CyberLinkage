@@ -19,6 +19,7 @@ type CreationType = 'idea' | 'outline' | 'description' | 'ppt_renovation';
 
 // 支持作为参考文件上传的文档扩展名（与后端 file_parser_service 保持一致）
 const ALLOWED_DOC_EXTENSIONS = ['pdf', 'docx', 'pptx', 'doc', 'ppt', 'xlsx', 'xls', 'csv', 'txt', 'md'];
+const CYBERLINKAGE_PPT_DRAFT_KEY = 'cyberlinkage:ppt-draft';
 
 // 页面特有翻译 - AI 可以直接看到所有文案，保留原始 key 结构
 const homeI18n = {
@@ -222,6 +223,27 @@ export const Home: React.FC = () => {
   useEffect(() => {
     sessionStorage.setItem('home-draft-tab', activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(CYBERLINKAGE_PPT_DRAFT_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.content) {
+        setActiveTab(parsed.activeTab === 'outline' ? 'outline' : 'description');
+        setContent(parsed.content);
+        show({
+          message: '已导入来自 CyberLinkage 知识图谱的 PPT 草稿，可继续编辑后再生成',
+          type: 'success',
+        });
+      }
+    } catch (error) {
+      console.error('解析 CyberLinkage 草稿失败:', error);
+    } finally {
+      sessionStorage.removeItem(CYBERLINKAGE_PPT_DRAFT_KEY);
+    }
+  }, [show]);
 
 
   // 检查是否有当前项目 & 加载用户模板

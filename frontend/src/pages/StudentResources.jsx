@@ -10,6 +10,7 @@ import React, {
 import useTeacherStore from '../store/teacherStore'
 import { filterFilesForStudent } from '../hooks/useFileAccess'
 import useUserStore from '../store/userStore'
+import ResourcePreviewModal from '../components/ResourcePreviewModal'
 
 const ALL_SUBJECT_OPTION = { id: 'all', label: '全部' }
 
@@ -30,6 +31,7 @@ function FileIcon({ name, size = 15 }) {
     ext === 'pdf'  ? '#ff4d4f' :
     ext === 'pptx' ? '#fa8c16' :
     ext === 'docx' ? '#1677ff' :
+    ext === 'md'   ? '#7c3aed' :
     '#8c8c8c'
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -385,10 +387,12 @@ export default function StudentResources() {
   const files       = useTeacherStore(s => s.files)
   const getBlobUrl  = useTeacherStore(s => s.getBlobUrl)
   const subjects    = useUserStore(s => s.subjects)
+  const resolvedTheme = useUserStore(s => s.resolvedTheme)
 
   const [activeTab, setActiveTab] = useState('all')
   const [search, setSearch]       = useState('')
   const [tick, setTick]           = useState(Date.now())
+  const [previewFile, setPreviewFile] = useState(null)
   const subjectOptions = useMemo(
     () => [ALL_SUBJECT_OPTION, ...subjects.filter(subject => subject.id !== 'all')],
     [subjects],
@@ -440,13 +444,8 @@ export default function StudentResources() {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   const handlePreview = useCallback((item) => {
-    const url = getBlobUrl(item.id)
-    if (!url) {
-      alert('该文件当前无法预览（可能需要刷新页面后老师重新上传）。')
-      return
-    }
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }, [getBlobUrl])
+    setPreviewFile(item)
+  }, [])
 
   const handleDownload = useCallback((item) => {
     const url = getBlobUrl(item.id)
@@ -480,7 +479,7 @@ export default function StudentResources() {
           学生资料
         </h1>
         <p style={{ fontSize: 13, color: 'var(--sr-text-sub)', margin: 0, lineHeight: 1.75, maxWidth: 600 }}>
-          以下是老师分享的课程资料，点击文件名或「预览」即可在线阅读，「下载」保存到本地。
+          以下是老师分享的课程资料，点击文件名或「预览」即可在线阅读；md/txt 会直接渲染，其他格式可继续打开或下载。
         </p>
       </div>
 
@@ -565,6 +564,15 @@ export default function StudentResources() {
           💡 资料由老师发布，如需最新内容请刷新页面。
         </p>
       )}
+
+      <ResourcePreviewModal
+        open={!!previewFile}
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+        getBlobUrl={getBlobUrl}
+        onDownload={handleDownload}
+        theme={resolvedTheme}
+      />
     </div>
   )
 }

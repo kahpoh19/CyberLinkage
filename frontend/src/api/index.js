@@ -75,6 +75,66 @@ export const chatWithAI = (message, mode = 'socratic', history = [], options = {
     current_topic: options.currentTopic,
   })
 
+export const streamChatWithAI = async (
+  message,
+  mode = 'socratic',
+  history = [],
+  options = {},
+  handlers = {},
+) => {
+  const token = localStorage.getItem('cyberlinkage_token')
+  const response = await fetch(`${api.defaults.baseURL}/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      message,
+      mode,
+      history,
+      subject_id: options.subjectId,
+      subject_label: options.subjectLabel,
+      current_topic: options.currentTopic,
+    }),
+    signal: handlers.signal,
+  })
+
+  if (!response.ok) {
+    let errorMessage = '网络错误，请稍后重试。'
+    try {
+      const data = await response.json()
+      errorMessage = data?.detail || data?.message || errorMessage
+    } catch {
+      const text = await response.text()
+      if (text) errorMessage = text
+    }
+    throw new Error(errorMessage)
+  }
+
+  if (!response.body) {
+    throw new Error('AI 返回为空，无法开始流式回答。')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+
+    const chunk = decoder.decode(value, { stream: true })
+    if (chunk) {
+      handlers.onChunk?.(chunk)
+    }
+  }
+
+  const tail = decoder.decode()
+  if (tail) {
+    handlers.onChunk?.(tail)
+  }
+}
+
 export const explainSandboxMechanism = (mechanismState, question = '请解释当前动画') =>
   api.post('/sandbox-ai/explain', { question, mechanism_state: mechanismState })
 

@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Card, Input, Button, Switch, Typography, Space } from 'antd'
 import SendOutlined from '@ant-design/icons/es/icons/SendOutlined'
 import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
 import ChatBubble from '../components/ChatBubble'
-import { chatWithAI } from '../api'
+import { streamChatWithAI } from '../api'
 import useUserStore, { getSubjectChatConfig } from '../store/userStore'
 
 const { Title, Text } = Typography
 
 export default function Chat() {
+  const location = useLocation()
   const messages = useUserStore((s) => s.chatMessages)
-  const addChatMessage = useUserStore((s) => s.addChatMessage)
+  const setChatMessages = useUserStore((s) => s.setChatMessages)
   const socraticMode = useUserStore((s) => s.socraticMode)
   const setSocraticMode = useUserStore((s) => s.setSocraticMode)
   const loading = useUserStore((s) => s.chatLoading)
@@ -18,7 +20,9 @@ export default function Chat() {
   const currentSubject = useUserStore((s) => s.currentSubject)
   const subjects = useUserStore((s) => s.subjects)
   const [input, setInput] = useState('')
+  const [currentTopic, setCurrentTopic] = useState(null)
   const messagesEndRef = useRef(null)
+  const abortRef = useRef(null)
   const chatConfig = getSubjectChatConfig(currentSubject, subjects)
   const currentModeLabel = socraticMode ? '苏格拉底式引导' : '直接解释'
   const currentModeHint = socraticMode
@@ -29,6 +33,21 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => () => abortRef.current?.abort(), [])
+
+  useEffect(() => {
+    if (location.state?.currentTopicId) {
+      setCurrentTopic({
+        id: location.state.currentTopicId,
+        name: location.state.currentTopicName || location.state.currentTopicId,
+      })
+    }
+
+    if (location.state?.presetInput) {
+      setInput(location.state.presetInput)
+    }
+  }, [location.state])
+
   const handleSend = async () => {
     const text = input.trim()
     if (!text || loading) return
@@ -38,26 +57,61 @@ export default function Chat() {
       content: text,
       timestamp: new Date().toLocaleTimeString(),
     }
-    addChatMessage(userMsg)
+    const baseMessages = [...messages, userMsg]
+    const aiTimestamp = new Date().toLocaleTimeString()
+    let streamedContent = ''
+
     setInput('')
     setChatLoading(true)
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setChatMessages([
+      ...baseMessages,
+      {
+        role: 'ai',
+        content: '',
+        timestamp: aiTimestamp,
+        streaming: true,
+      },
+    ])
 
     try {
-      const history = messages.map((m) => ({
+      const history = baseMessages.map((m) => ({
         role: m.role === 'ai' ? 'assistant' : 'user',
         content: m.content,
       }))
-      const res = await chatWithAI(text, socraticMode ? 'socratic' : 'explain', history, {
+      await streamChatWithAI(text, socraticMode ? 'socratic' : 'explain', history, {
         subjectId: currentSubject,
         subjectLabel: chatConfig.label,
+        currentTopic: currentTopic?.id,
+      }, {
+        signal: controller.signal,
+        onChunk: (chunk) => {
+          streamedContent += chunk
+          setChatMessages([
+            ...baseMessages,
+            {
+              role: 'ai',
+              content: streamedContent,
+              timestamp: aiTimestamp,
+              streaming: true,
+            },
+          ])
+        },
       })
-      const aiMsg = {
-        role: 'ai',
-        content: res.data.response || res.data.message || '抱歉，我暂时无法回答这个问题。',
-        timestamp: new Date().toLocaleTimeString(),
-      }
-      addChatMessage(aiMsg)
+
+      setChatMessages([
+        ...baseMessages,
+        {
+          role: 'ai',
+          content: streamedContent || '抱歉，我暂时无法回答这个问题。',
+          timestamp: aiTimestamp,
+        },
+      ])
     } catch (e) {
+      if (controller.signal.aborted) return
+
       const detail =
         e.response?.data?.detail ||
         e.response?.data?.message ||
@@ -65,12 +119,20 @@ export default function Chat() {
         e.message ||
         '网络错误，请稍后重试。'
 
-      addChatMessage({
-        role: 'ai',
-        content: `⚠️ ${detail}`,
-        timestamp: new Date().toLocaleTimeString(),
-      })
+      setChatMessages([
+        ...baseMessages,
+        {
+          role: 'ai',
+          content: streamedContent
+            ? `${streamedContent}\n\n> ⚠️ 连接中断：${detail}`
+            : `⚠️ ${detail}`,
+          timestamp: aiTimestamp,
+        },
+      ])
     } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null
+      }
       setChatLoading(false)
     }
   }
@@ -84,6 +146,17 @@ export default function Chat() {
         <Space direction="vertical" size={2} align="end">
           <Text type="secondary">当前科目：{chatConfig.label}</Text>
           <Text type="secondary">当前模式：{currentModeLabel}</Text>
+          {currentTopic && (
+            <Text type="secondary">
+              当前聚焦：{currentTopic.name}
+              <span
+                onClick={() => setCurrentTopic(null)}
+                style={{ marginLeft: 8, cursor: 'pointer', color: '#1677ff' }}
+              >
+                清除
+              </span>
+            </Text>
+          )}
           <Text type="secondary" style={{ fontSize: 12 }}>
             {currentModeHint}
           </Text>
@@ -106,11 +179,9 @@ export default function Chat() {
             message={msg.content}
             isUser={msg.role === 'user'}
             timestamp={msg.timestamp}
+            isStreaming={!!msg.streaming}
           />
         ))}
-        {loading && (
-          <ChatBubble message="正在思考中..." isUser={false} timestamp="" />
-        )}
         <div ref={messagesEndRef} />
       </Card>
 

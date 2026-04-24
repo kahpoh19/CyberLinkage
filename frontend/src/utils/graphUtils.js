@@ -119,3 +119,161 @@ export function buildTreeData(graphData, theme = 'light', expandAll = false) {
 
   return roots.map(r => buildNode(r.id)).filter(Boolean)
 }
+
+function splitDescriptionPoints(description = '') {
+  return description
+    .split(/[。；;\n]/)
+    .flatMap(segment => segment.split(/[、，,]/))
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+export function deriveCorePoints(node, maxPoints = 4) {
+  if (!node) return []
+
+  const points = []
+  if (node.category) {
+    points.push(`${node.category}中的关键知识点`)
+  }
+
+  splitDescriptionPoints(node.description).forEach((item) => {
+    if (!points.includes(item)) {
+      points.push(item)
+    }
+  })
+
+  return points.slice(0, maxPoints)
+}
+
+export function getNodeRelations(graphData, nodeId) {
+  if (!graphData || !nodeId) {
+    return { prerequisites: [], unlocks: [] }
+  }
+
+  const nodes = graphData.nodes || []
+  const edges = graphData.edges || []
+  const nodeMap = new Map(nodes.map(node => [node.id, node]))
+
+  return {
+    prerequisites: edges
+      .filter(edge => edge.target === nodeId || edge.to === nodeId)
+      .map(edge => nodeMap.get(edge.source || edge.from))
+      .filter(Boolean),
+    unlocks: edges
+      .filter(edge => edge.source === nodeId || edge.from === nodeId)
+      .map(edge => nodeMap.get(edge.target || edge.to))
+      .filter(Boolean),
+  }
+}
+
+export function getGraphOverview(graphData) {
+  const nodes = graphData?.nodes || []
+  const chapterCount = new Set(nodes.map(node => node.chapter || 0)).size
+  const masteredCount = nodes.filter(node => node.mastery >= 0.7).length
+  const learningCount = nodes.filter(
+    node => node.mastery != null && node.mastery >= 0.4 && node.mastery < 0.7,
+  ).length
+  const weakCount = nodes.filter(
+    node => node.mastery == null || node.mastery < 0.4,
+  ).length
+
+  const focusNodes = [...nodes]
+    .sort((a, b) => {
+      const masteryA = a.mastery == null ? -1 : a.mastery
+      const masteryB = b.mastery == null ? -1 : b.mastery
+      if (masteryA !== masteryB) return masteryA - masteryB
+      return (b.difficulty || 0) - (a.difficulty || 0)
+    })
+    .slice(0, 5)
+
+  return {
+    totalNodes: nodes.length,
+    chapterCount,
+    masteredCount,
+    learningCount,
+    weakCount,
+    focusNodes,
+  }
+}
+
+export function buildKnowledgeGraphPptDraft(subjectLabel, graphData, focusNode = null) {
+  const overview = getGraphOverview(graphData)
+
+  if (focusNode) {
+    const { prerequisites, unlocks } = getNodeRelations(graphData, focusNode.id)
+    const corePoints = deriveCorePoints(focusNode)
+    const normalizedCorePoints = corePoints.length
+      ? corePoints
+      : ['概念定义', '关键组成', '常见误区', '典型应用']
+
+    return [
+      `请基于以下知识点生成一份适合课堂讲解的 PPT 页面描述，输出中文。`,
+      ``,
+      `主题：${subjectLabel} · ${focusNode.name}`,
+      `目标受众：正在学习该知识点的大学生`,
+      `讲解目标：帮助学生快速理解知识点定位、核心概念、前置知识、常见误区与应用场景。`,
+      ``,
+      `知识点信息：`,
+      `- 所属分类：${focusNode.category || '未分类'}`,
+      `- 所属章节：第 ${focusNode.chapter || 0} 章`,
+      `- 难度：${focusNode.difficulty || 3} / 5`,
+      `- 预计学习时长：${focusNode.estimated_minutes || 30} 分钟`,
+      `- 当前说明：${focusNode.description || '暂无补充说明'}`,
+      ``,
+      `核心要点：`,
+      ...normalizedCorePoints.map(point => `- ${point}`),
+      ``,
+      `前置知识：`,
+      ...(prerequisites.length
+        ? prerequisites.map(node => `- ${node.name}`)
+        : ['- 暂无明显前置知识']),
+      ``,
+      `后续可拓展知识点：`,
+      ...(unlocks.length
+        ? unlocks.map(node => `- ${node.name}`)
+        : ['- 暂无直接后继知识点']),
+      ``,
+      `请输出适合 PPT 生成器继续编辑的页面描述，建议包含：`,
+      `第1页：知识点定位与学习目标`,
+      `第2页：核心概念与关键要点`,
+      `第3页：前置知识与易错点`,
+      `第4页：典型应用或练习建议`,
+      ``,
+      `输出要求：`,
+      `- 每页都写清标题、要点、推荐版式`,
+      `- 语言简洁，不要写成长篇大段`,
+      `- 适合后续继续手动编辑`,
+    ].join('\n')
+  }
+
+  return [
+    `请基于以下课程知识图谱整理一份适合教学展示的 PPT 页面描述，输出中文。`,
+    ``,
+    `主题：${subjectLabel} 知识图谱梳理`,
+    `目标受众：需要快速建立课程全局认知的大学生`,
+    `讲解目标：帮助学生看清课程结构、重点模块、优先学习顺序与当前薄弱点。`,
+    ``,
+    `图谱概况：`,
+    `- 总知识点数：${overview.totalNodes}`,
+    `- 章节数：${overview.chapterCount}`,
+    `- 已掌握：${overview.masteredCount}`,
+    `- 学习中：${overview.learningCount}`,
+    `- 待重点关注：${overview.weakCount}`,
+    ``,
+    `当前建议重点梳理的知识点：`,
+    ...(overview.focusNodes.length
+      ? overview.focusNodes.map(node => `- ${node.name}（第 ${node.chapter || 0} 章）`)
+      : ['- 暂无重点知识点']),
+    ``,
+    `请输出适合 PPT 生成器继续编辑的页面描述，建议包含：`,
+    `第1页：课程全景与章节结构`,
+    `第2页：核心模块拆解`,
+    `第3页：重点/薄弱知识点梳理`,
+    `第4页：推荐学习顺序与复习建议`,
+    ``,
+    `输出要求：`,
+    `- 每页都写清标题、要点、推荐版式`,
+    `- 内容要简洁，适合课堂讲解`,
+    `- 方便后续继续手动编辑`,
+  ].join('\n')
+}
