@@ -1,10 +1,15 @@
 import axios from 'axios'
+import { getClientDeviceHeaders } from '../utils/device'
 
 const api = axios.create({ baseURL: '/api' })
 
 // 请求拦截器：自动附带 JWT
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('cyberlinkage_token')
+  config.headers = {
+    ...config.headers,
+    ...getClientDeviceHeaders(),
+  }
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -16,6 +21,7 @@ api.interceptors.request.use((config) => {
 export const register = (data) => api.post('/auth/register', data)
 export const login = (data) => api.post('/auth/login', data)
 export const getMe = () => api.get('/auth/me')
+export const getDeviceContext = () => api.get('/client/device')
 
 // ─── 诊断测评 ─────────────────────────────────────
 
@@ -87,6 +93,7 @@ export const streamChatWithAI = async (
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getClientDeviceHeaders(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({

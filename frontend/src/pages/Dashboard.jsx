@@ -11,9 +11,10 @@ import { getReport, getProgress, getMe } from '../api'
 const { Title, Paragraph } = Typography
 
 export default function Dashboard() {
-  const { user, isAuthenticated, setUser, openAuthModal, currentSubject } = useUserStore()
+  const { user, isAuthenticated, setUser, openAuthModal, currentSubject, deviceInfo } = useUserStore()
   const subjectLabel = SUBJECTS.find(s => s.id === currentSubject)?.label || currentSubject
   const displayName = user?.display_name || user?.displayName || user?.username || '同学'
+  const isMobileLayout = deviceInfo?.isMobileLayout
 
   const [summary, setSummary] = useState(null)
   const [progress, setProgress] = useState([])
@@ -41,7 +42,7 @@ export default function Dashboard() {
 
   if (!isAuthenticated()) {
     return (
-      <div style={{ textAlign: 'center', marginTop: 100 }}>
+      <div style={{ textAlign: 'center', marginTop: isMobileLayout ? 48 : 100, padding: '0 12px' }}>
         <Title level={2}>🧠 CyberLinkage</Title>
         <Paragraph style={{ fontSize: 16, color: '#666' }}>
           基于知识图谱的个性化学习伴侣
@@ -55,10 +56,12 @@ export default function Dashboard() {
 
   return (
     <div>
-      <Title level={4}>👋 你好，{displayName}！当前科目：{subjectLabel}</Title>
+      <Title level={4} style={{ marginTop: 0 }}>
+        👋 你好，{displayName}！当前科目：{subjectLabel}
+      </Title>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="累计做题"
@@ -68,7 +71,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="正确率"
@@ -78,7 +81,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="已掌握"
@@ -88,7 +91,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic
               title="活跃天数"
@@ -101,7 +104,7 @@ export default function Dashboard() {
       </Row>
 
       <Row gutter={16}>
-        <Col span={12}>
+        <Col xs={24} xl={12}>
           <Card title="📊 掌握度雷达图">
             {progress.length > 0 ? (
               <RadarChart
@@ -113,7 +116,7 @@ export default function Dashboard() {
             )}
           </Card>
         </Col>
-        <Col span={12}>
+        <Col xs={24} xl={12}>
           <Card title="📅 最近活跃">
             {summary?.recent_activity?.length > 0 ? (
               <ul>

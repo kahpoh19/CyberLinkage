@@ -30,7 +30,9 @@ export default function Profile() {
     const {
         user,
         setUser,
+        deviceInfo,
     } = useUserStore()
+    const isMobileLayout = deviceInfo?.isMobileLayout
 
     const [profile, setProfile] = useState(null)
     const [documents, setDocuments] = useState([])
@@ -341,7 +343,7 @@ export default function Profile() {
             <Title level={4}>👤 个人中心</Title>
 
             <Row gutter={24}>
-                <Col span={8}>
+                <Col xs={24} lg={8}>
                     <Card title="基本信息" style={{ marginBottom: 24 }}>    
                         <div style={{ textAlign: 'center', marginBottom: 16 }}>
                             <Avatar
@@ -353,9 +355,12 @@ export default function Profile() {
                                 <Tag color={profile?.role === 'teacher' ? 'blue' : 'green'}>
                                     {getRoleLabel(profile?.role)}
                                 </Tag>
+                                <Tag color="purple" style={{ marginLeft: 8 }}>
+                                    当前设备：{deviceInfo?.deviceLabel || '桌面端'}
+                                </Tag>
                             </div>
                             <br />
-                            <Space>
+                            <Space wrap>
                                 <Upload beforeUpload={handleAvatarUpload} showUploadList={false} accept="image/*">
                                     <Button icon={<UploadOutlined />} size="small">更换头像</Button>
                                 </Upload>
@@ -397,7 +402,7 @@ export default function Profile() {
                     </Card>
                 </Col>
 
-                <Col span={16}>
+                <Col xs={24} lg={16}>
                     <Card
                         title="我的文件"
                         style={{ marginBottom: 24 }}
@@ -412,7 +417,7 @@ export default function Profile() {
                             </Upload>
                         }
                     >
-                        <Space style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+                        <Space wrap style={{ marginBottom: 12, flexWrap: 'wrap' }}>
                             <Button onClick={handleSelectAllDocuments}>
                                 {allSelected ? '取消全选' : '全选全部文件'}
                             </Button>
@@ -456,6 +461,7 @@ export default function Profile() {
                             size="small"
                             rowSelection={rowSelection}
                             pagination={{ pageSize: 8 }}
+                            scroll={isMobileLayout ? { x: 720 } : undefined}
                         />
 
                         <div style={{ marginTop: 12, color: '#888' }}>
@@ -471,6 +477,7 @@ export default function Profile() {
                     columns={progressColumns}
                     rowKey="knowledge_point_id"
                     pagination={{ pageSize: 8 }}
+                    scroll={isMobileLayout ? { x: 520 } : undefined}
                 />
             </Card>
         </div>

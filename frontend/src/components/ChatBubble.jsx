@@ -3,6 +3,7 @@ import { Avatar, Typography } from 'antd'
 import UserOutlined from '@ant-design/icons/es/icons/UserOutlined'
 import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
 import ReactMarkdown from 'react-markdown'
+import useUserStore from '../store/userStore'
 
 const { Text } = Typography
 
@@ -17,6 +18,7 @@ const { Text } = Typography
 export default function ChatBubble({ message, isUser, timestamp, isStreaming = false }) {
   const aiTextColor = '#1f2937'
   const userTextColor = '#fff'
+  const isMobileLayout = useUserStore((s) => s.deviceInfo?.isMobileLayout)
 
   return (
     <div
@@ -37,8 +39,8 @@ export default function ChatBubble({ message, isUser, timestamp, isStreaming = f
       />
       <div
         style={{
-          maxWidth: '70%',
-          padding: '10px 14px',
+          maxWidth: isMobileLayout ? '88%' : '70%',
+          padding: isMobileLayout ? '10px 12px' : '10px 14px',
           borderRadius: isUser ? '12px 2px 12px 12px' : '2px 12px 12px 12px',
           backgroundColor: isUser ? '#1677ff' : '#f5f5f5',
           color: isUser ? '#fff' : '#333',

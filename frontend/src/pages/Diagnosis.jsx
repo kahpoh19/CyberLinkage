@@ -21,7 +21,7 @@ function DiffBadge({ difficulty }) {
   return <Tag color={color}>{'⭐'.repeat(difficulty)} {label}</Tag>
 }
 
-function QuestionCard({ exercise, answer, onAnswer, index, total, isDark }) {
+function QuestionCard({ exercise, answer, onAnswer, index, total, isDark, isMobile }) {
   const options = exercise?.options || {}
   const progress = Math.round((index / total) * 100)
   const questionColor = isDark ? '#f0f0f0' : '#1a1a1a'
@@ -56,7 +56,7 @@ function QuestionCard({ exercise, answer, onAnswer, index, total, isDark }) {
           boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
           border: cardBorder,
         }}
-        styles={{ body: { padding: '28px 32px' } }}
+        styles={{ body: { padding: isMobile ? '20px 18px' : '28px 32px' } }}
       >
         <Space style={{ marginBottom: 16 }}>
           <Tag color="blue" style={{ borderRadius: 20 }}>{exercise.knowledge_point_id}</Tag>
@@ -65,10 +65,10 @@ function QuestionCard({ exercise, answer, onAnswer, index, total, isDark }) {
 
         <div
           style={{
-            fontSize: 16,
+            fontSize: isMobile ? 15 : 16,
             fontWeight: 600,
             lineHeight: 1.7,
-            marginBottom: 28,
+            marginBottom: isMobile ? 20 : 28,
             whiteSpace: 'pre-wrap',
             color: questionColor,
           }}
@@ -117,7 +117,7 @@ function QuestionCard({ exercise, answer, onAnswer, index, total, isDark }) {
   )
 }
 
-function ReviewCard({ exercise, userAnswer, index, isDark }) {
+function ReviewCard({ exercise, userAnswer, index, isDark, isMobile }) {
   const correct = exercise.correct_answer
   const isCorrect = userAnswer?.toUpperCase() === correct?.toUpperCase()
   const options = exercise?.options || {}
@@ -138,9 +138,9 @@ function ReviewCard({ exercise, userAnswer, index, isDark }) {
         background: cardBg,
         boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
       }}
-      styles={{ body: { padding: '20px 24px' } }}
+      styles={{ body: { padding: isMobile ? '16px 16px' : '20px 24px' } }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, flexWrap: isMobile ? 'wrap' : 'nowrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
           {isCorrect
             ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18, flexShrink: 0 }} />
@@ -244,6 +244,7 @@ export default function Diagnosis() {
   const [searchParams] = useSearchParams()
   const isDark = useUserStore((s) => s.resolvedTheme === 'dark')
   const currentSubject = useUserStore((s) => s.currentSubject)
+  const isMobileLayout = useUserStore((s) => s.deviceInfo?.isMobileLayout)
 
   const [phase, setPhase] = useState('start')
   const [exercises, setExercises] = useState([])
@@ -425,7 +426,7 @@ export default function Diagnosis() {
     }
 
     return (
-      <div style={{ maxWidth: 560, margin: '60px auto', textAlign: 'center', padding: '0 16px' }}>
+      <div style={{ maxWidth: 560, margin: isMobileLayout ? '24px auto' : '60px auto', textAlign: 'center', padding: '0 16px' }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>
           {routePractice?.knowledgePointId ? '🎯' : '🩺'}
         </div>
@@ -570,6 +571,7 @@ export default function Diagnosis() {
             index={current}
             total={exercises.length}
             isDark={isDark}
+            isMobile={isMobileLayout}
           />
         )}
 
@@ -579,7 +581,9 @@ export default function Diagnosis() {
             margin: '20px auto 0',
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: isMobileLayout ? 'stretch' : 'center',
+            flexDirection: isMobileLayout ? 'column' : 'row',
+            gap: isMobileLayout ? 10 : 0,
           }}
         >
           <Button
@@ -588,6 +592,7 @@ export default function Diagnosis() {
             icon={<LeftOutlined />}
             size="large"
             style={{ borderRadius: 10 }}
+            block={isMobileLayout}
           >
             上一题
           </Button>
@@ -606,6 +611,7 @@ export default function Diagnosis() {
               icon={<RightOutlined />}
               iconPosition="end"
               style={{ borderRadius: 10 }}
+              block={isMobileLayout}
             >
               下一题
             </Button>
@@ -618,6 +624,7 @@ export default function Diagnosis() {
               disabled={!allAnswered}
               style={{ borderRadius: 10 }}
               title={!allAnswered ? `还有 ${exercises.length - answered} 题未答` : ''}
+              block={isMobileLayout}
             >
               {allAnswered ? '提交诊断' : `还有${exercises.length - answered}题未答`}
             </Button>
@@ -776,6 +783,7 @@ export default function Diagnosis() {
                 userAnswer={ans[ex.id]}
                 index={exList.indexOf(ex)}
                 isDark={isDark}
+                isMobile={isMobileLayout}
               />
             ))}
           </div>
@@ -796,17 +804,19 @@ export default function Diagnosis() {
                 userAnswer={ans[ex.id]}
                 index={exList.indexOf(ex)}
                 isDark={isDark}
+                isMobile={isMobileLayout}
               />
             ))}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 8, flexDirection: isMobileLayout ? 'column' : 'row' }}>
           <Button
             size="large"
             onClick={handleReset}
             icon={activeSession?.knowledgePointId ? <PlayCircleOutlined /> : <ReloadOutlined />}
             style={{ borderRadius: 10 }}
+            block={isMobileLayout}
           >
             {activeSession?.knowledgePointId ? '再做一次' : '重新诊断'}
           </Button>
@@ -816,6 +826,7 @@ export default function Diagnosis() {
             onClick={() => navigate('/path')}
             icon={<NodeIndexOutlined />}
             style={{ borderRadius: 10 }}
+            block={isMobileLayout}
           >
             {activeSession?.knowledgePointId ? '返回学习路径' : '查看学习路径'}
           </Button>

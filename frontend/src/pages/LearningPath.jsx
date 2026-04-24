@@ -19,6 +19,7 @@ export default function LearningPath() {
   const navigate = useNavigate()
   const currentSubject = useUserStore((s) => s.currentSubject)
   const resolvedTheme = useUserStore((s) => s.resolvedTheme)
+  const isMobileLayout = useUserStore((s) => s.deviceInfo?.isMobileLayout)
   const subjectLabel = SUBJECTS.find((s) => s.id === currentSubject)?.label || currentSubject
   const isDark = resolvedTheme === 'dark'
 
@@ -143,7 +144,7 @@ export default function LearningPath() {
         .learning-path-page .lp-side-panel-card {
           display: flex;
           flex-direction: column;
-          max-height: calc(100vh - 48px);
+          max-height: calc(100dvh - 48px);
         }
 
         .learning-path-page .lp-side-panel-card .ant-card-head {
@@ -279,7 +280,7 @@ export default function LearningPath() {
           <Card
             className="lp-panel-card"
             title="学习路线"
-            extra={<Text type="secondary">点击标题切换右侧题目，按钮可直接开始测评</Text>}
+            extra={isMobileLayout ? null : <Text type="secondary">点击标题切换右侧题目，按钮可直接开始测评</Text>}
           >
             <PathTimeline
               items={pathData.path}
@@ -295,6 +296,7 @@ export default function LearningPath() {
                 navigate(`/diagnosis?${params.toString()}`)
               }}
               isDark={isDark}
+              isMobile={isMobileLayout}
             />
           </Card>
         </Col>

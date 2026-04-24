@@ -19,11 +19,13 @@ export default function Chat() {
   const setChatLoading = useUserStore((s) => s.setChatLoading)
   const currentSubject = useUserStore((s) => s.currentSubject)
   const subjects = useUserStore((s) => s.subjects)
+  const deviceInfo = useUserStore((s) => s.deviceInfo)
   const [input, setInput] = useState('')
   const [currentTopic, setCurrentTopic] = useState(null)
   const messagesEndRef = useRef(null)
   const abortRef = useRef(null)
   const chatConfig = getSubjectChatConfig(currentSubject, subjects)
+  const isMobileLayout = deviceInfo?.isMobileLayout
   const currentModeLabel = socraticMode ? '苏格拉底式引导' : '直接解释'
   const currentModeHint = socraticMode
     ? `AI 会优先通过提问和提示，帮助你自己想出 ${chatConfig.label} 问题的答案。`
@@ -138,12 +140,21 @@ export default function Chat() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100dvh - 180px)' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: isMobileLayout ? 'flex-start' : 'center',
+          flexDirection: isMobileLayout ? 'column' : 'row',
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
         <Title level={4} style={{ margin: 0 }}>
           <RobotOutlined /> {chatConfig.pageTitle}
         </Title>
-        <Space direction="vertical" size={2} align="end">
+        <Space direction="vertical" size={2} align={isMobileLayout ? 'start' : 'end'}>
           <Text type="secondary">当前科目：{chatConfig.label}</Text>
           <Text type="secondary">当前模式：{currentModeLabel}</Text>
           {currentTopic && (
@@ -171,7 +182,7 @@ export default function Chat() {
 
       <Card
         style={{ flex: 1, overflow: 'auto', marginBottom: 16 }}
-        bodyStyle={{ padding: 16 }}
+        bodyStyle={{ padding: isMobileLayout ? 12 : 16 }}
       >
         {messages.map((msg, i) => (
           <ChatBubble
@@ -185,7 +196,7 @@ export default function Chat() {
         <div ref={messagesEndRef} />
       </Card>
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexDirection: isMobileLayout ? 'column' : 'row' }}>
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -200,6 +211,7 @@ export default function Chat() {
           size="large"
           onClick={handleSend}
           loading={loading}
+          block={isMobileLayout}
         >
           发送
         </Button>

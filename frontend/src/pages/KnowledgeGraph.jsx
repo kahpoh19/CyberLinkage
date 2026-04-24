@@ -77,6 +77,7 @@ export default function KnowledgeGraph() {
   const currentSubject = useUserStore((s) => s.currentSubject)
   const subjects = useUserStore((s) => s.subjects)
   const resolvedTheme = useUserStore((s) => s.resolvedTheme)
+  const isMobileLayout = useUserStore((s) => s.deviceInfo?.isMobileLayout)
   const subjectLabel = subjects.find(s => s.id === currentSubject)?.label || currentSubject
   const files = useTeacherStore((s) => s.files)
   const getBlobUrl = useTeacherStore((s) => s.getBlobUrl)
@@ -182,11 +183,12 @@ export default function KnowledgeGraph() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobileLayout ? 'stretch' : 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap', flexDirection: isMobileLayout ? 'column' : 'row' }}>
         <Title level={4} style={{ margin: 0 }}>
           🗺️ {subjectLabel} 知识图谱
         </Title>
         <Segmented
+          block={isMobileLayout}
           value={viewMode}
           onChange={setViewMode}
           options={[
@@ -251,7 +253,7 @@ export default function KnowledgeGraph() {
         </span>
       </div>
 
-      <Card style={{ height: 'calc(100vh - 410px)', minHeight: 420 }} bodyStyle={{ height: '100%', padding: 0 }}>
+      <Card style={{ height: isMobileLayout ? '62dvh' : 'calc(100dvh - 410px)', minHeight: isMobileLayout ? 360 : 420 }} bodyStyle={{ height: '100%', padding: 0 }}>
         {!graphData || !graphData.nodes || graphData.nodes.length === 0 ? (
           <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
             <Empty description={`「${subjectLabel}」暂无图谱数据`} />
@@ -267,7 +269,7 @@ export default function KnowledgeGraph() {
         title={selectedNode?.name || '知识点详情'}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={420}
+        width={isMobileLayout ? '100%' : 420}
       >
         {selectedNode && (
           <>
@@ -362,7 +364,7 @@ export default function KnowledgeGraph() {
                       background: 'rgba(248, 250, 252, 0.9)',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexDirection: isMobileLayout ? 'column' : 'row' }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 600, color: '#111827', wordBreak: 'break-all' }}>
                           <FileTextOutlined style={{ marginRight: 8 }} />
@@ -372,7 +374,7 @@ export default function KnowledgeGraph() {
                           匹配度 {file._score} · {subjectLabel}
                         </div>
                       </div>
-                      <Space>
+                      <Space wrap>
                         <Button size="small" onClick={() => setPreviewFile(file)}>
                           预览
                         </Button>

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getClientDeviceInfo } from '../utils/device'
 
 const THEME_STORAGE_KEY = 'cyberlinkage_theme'
 const CHAT_STORAGE_PREFIX = 'cyberlinkage_chat_messages'
@@ -235,6 +236,7 @@ const useUserStore = create((set, get) => {
   const initialCustomSubjects = loadCustomSubjects()
   const initialSubjects = buildSubjectList(initialCustomSubjects)
   const initialCurrentSubject = getInitialSubject()
+  const initialDeviceInfo = getClientDeviceInfo()
   const initialChatSessions = ensureSubjectChatSession(
     getStoredChatSessions(initialCurrentSubject, initialSubjects) || {},
     initialCurrentSubject,
@@ -252,6 +254,7 @@ const useUserStore = create((set, get) => {
     chatLoading: false,
     socraticMode: true,
     showAuthModal: false,
+    deviceInfo: initialDeviceInfo,
 
     // 科目列表（内置 + 自定义）
     subjects: initialSubjects,
@@ -261,6 +264,9 @@ const useUserStore = create((set, get) => {
 
     openAuthModal: () => set({ showAuthModal: true }),
     closeAuthModal: () => set({ showAuthModal: false }),
+    setDeviceInfo: (deviceInfo) => set((state) => ({
+      deviceInfo: { ...state.deviceInfo, ...deviceInfo },
+    })),
 
     setCurrentSubject: (id) => {
       persistSubject(id)

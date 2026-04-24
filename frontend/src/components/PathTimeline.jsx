@@ -40,6 +40,7 @@ export default function PathTimeline({
   onSelect,
   onStartPractice,
   isDark = false,
+  isMobile = false,
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -159,7 +160,7 @@ export default function PathTimeline({
                     ) : null}
                   </div>
 
-                  <div style={{ minWidth: 128, display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ minWidth: isMobile ? '100%' : 128, display: 'flex', justifyContent: isMobile ? 'stretch' : 'flex-end' }}>
                     <Button
                       type={active ? 'primary' : 'default'}
                       icon={<PlayCircleOutlined />}
@@ -173,6 +174,7 @@ export default function PathTimeline({
                         paddingInline: 18,
                         fontWeight: 600,
                         boxShadow: active ? '0 10px 20px rgba(22,119,255,0.18)' : 'none',
+                        width: isMobile ? '100%' : 'auto',
                       }}
                     >
                       开始做题

@@ -29,7 +29,7 @@ body {
     radial-gradient(circle at 92% 18%, rgba(34, 197, 94, 0.16), transparent 30%),
     linear-gradient(135deg, #f8fbff 0%, #eef6f8 48%, #f7fafc 100%);
   --cy-app-bg: var(--cy-page-bg);
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--cy-app-bg);
 }
 
@@ -224,7 +224,7 @@ body {
 }
 
 .cy-route-content {
-  min-height: calc(100vh - 64px);
+  min-height: calc(100dvh - 64px);
   padding: 24px;
   color: var(--cy-text-soft);
   transition: background 0.3s ease;
@@ -309,7 +309,18 @@ body {
 }
 
 @media (max-width: 768px) {
+  .cy-app-shell,
+  .cy-main-layout,
   .cy-route-content {
-    padding: 16px;
+    min-height: 100dvh;
+  }
+
+  .cy-route-content {
+    padding: 14px;
+  }
+
+  .cy-app-header.ant-layout-header {
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 }

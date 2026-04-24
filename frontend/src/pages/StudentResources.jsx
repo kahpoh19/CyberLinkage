@@ -142,7 +142,7 @@ function injectCSS() {
 }
 
 // ── Action button ─────────────────────────────────────────────────────────────
-function ActionBtn({ onClick, title, hue, children }) {
+function ActionBtn({ onClick, title, hue, children, fullWidth = false }) {
   const cols = {
     cyan:   { bg: 'rgba(14,165,233,0.10)',  border: 'rgba(14,165,233,0.30)',  color: '#38bdf8' },
     purple: { bg: 'rgba(168,85,247,0.10)', border: 'rgba(168,85,247,0.30)', color: '#c084fc' },
@@ -158,6 +158,8 @@ function ActionBtn({ onClick, title, hue, children }) {
         padding: '5px 10px', borderRadius: 7, flexShrink: 0,
         background: c.bg, border: `0.5px solid ${c.border}`,
         color: c.color, cursor: 'pointer', fontSize: 12, fontWeight: 500,
+        width: fullWidth ? '100%' : 'auto',
+        justifyContent: fullWidth ? 'center' : 'flex-start',
       }}
     >
       {children}
@@ -209,7 +211,8 @@ function SubjectTabs({ active, onChange, counts, subjects }) {
 }
 
 // ── Table header ──────────────────────────────────────────────────────────────
-function TableHeader() {
+function TableHeader({ isMobile = false }) {
+  if (isMobile) return null
   const th = (t, align = 'left') => (
     <span style={{
       fontSize: 11, fontWeight: 500, color: 'var(--sr-text-sub)',
@@ -255,7 +258,76 @@ function ParseBadge({ status }) {
 }
 
 // ── File row ──────────────────────────────────────────────────────────────────
-function FileRow({ item, onPreview, onDownload, subjectMap }) {
+function FileRow({ item, onPreview, onDownload, subjectMap, isMobile = false }) {
+  if (isMobile) {
+    return (
+      <div
+        className="sr-row-wrap"
+        style={{
+          padding: '12px 14px',
+          borderRadius: 12,
+          background: 'var(--sr-row)',
+          border: '0.5px solid var(--sr-border)',
+          marginBottom: 8,
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+            <span style={{ flexShrink: 0 }}><FileIcon name={item.name} /></span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <button
+                className="sr-fname-btn"
+                onClick={() => onPreview(item)}
+                style={{
+                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 500, color: 'var(--sr-cyan)',
+                  textDecoration: 'underline', textDecorationColor: 'rgba(14,165,233,0.35)',
+                  textUnderlineOffset: 2, textAlign: 'left', display: 'block',
+                  transition: 'color 0.15s', wordBreak: 'break-word',
+                }}
+                title={`在线预览：${item.name}`}
+              >
+                {item.name}
+              </button>
+              {item.uploadedAt && (
+                <span style={{ fontSize: 11, color: 'var(--sr-text-sub)', display: 'block', marginTop: 4 }}>
+                  {fmtTs(item.uploadedAt)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <span style={{ fontSize: 12, color: 'var(--sr-text-sub)', whiteSpace: 'nowrap' }}>
+            {fmtSz(item.size || 0)}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={{
+            fontSize: 11, padding: '3px 8px', borderRadius: 20,
+            background: 'rgba(14,165,233,0.10)', border: '0.5px solid rgba(14,165,233,0.25)',
+            color: '#38bdf8',
+          }}>
+            {subjectMap[item.subject] || item.subject}
+          </span>
+          <ParseBadge status={item.status} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 12 }}>
+          <ActionBtn onClick={() => onPreview(item)} title="在线预览文件" hue="cyan" fullWidth>
+            <Icons.Eye s={12} />
+            预览
+          </ActionBtn>
+          <ActionBtn onClick={() => onDownload(item)} title="下载文件" hue="purple" fullWidth>
+            <Icons.Download s={12} />
+            下载
+          </ActionBtn>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className="sr-row-wrap"
@@ -387,6 +459,7 @@ export default function StudentResources() {
   const files       = useTeacherStore(s => s.files)
   const getBlobUrl  = useTeacherStore(s => s.getBlobUrl)
   const subjects    = useUserStore(s => s.subjects)
+  const isMobileLayout = useUserStore(s => s.deviceInfo?.isMobileLayout)
   const resolvedTheme = useUserStore(s => s.resolvedTheme)
 
   const [activeTab, setActiveTab] = useState('all')
@@ -462,7 +535,7 @@ export default function StudentResources() {
       className="sr-page"
       style={{
         minHeight: '100%',
-        padding: '26px 22px',
+        padding: isMobileLayout ? '18px 10px' : '26px 22px',
         fontFamily: 'inherit',
         fontWeight: 400,
         color: 'var(--sr-text)',
@@ -472,7 +545,7 @@ export default function StudentResources() {
       {/* Page header */}
       <div style={{ marginBottom: 22 }}>
         <h1 style={{
-          fontSize: 20, fontWeight: 600, margin: '0 0 5px',
+          fontSize: isMobileLayout ? 18 : 20, fontWeight: 600, margin: '0 0 5px',
           background: 'linear-gradient(90deg,#38bdf8,#0ea5e9)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block',
         }}>
@@ -490,7 +563,7 @@ export default function StudentResources() {
         border: '0.5px solid var(--sr-border-acc)',
         borderRadius: 12, padding: '8px 14px', marginBottom: 20,
         backdropFilter: 'var(--sr-blur)', WebkitBackdropFilter: 'var(--sr-blur)',
-        maxWidth: 360,
+        maxWidth: isMobileLayout ? 'none' : 360,
       }}>
         <span style={{ color: 'var(--sr-text-sub)', flexShrink: 0 }}><Icons.Search /></span>
         <input
@@ -518,11 +591,11 @@ export default function StudentResources() {
         background: 'var(--sr-card)',
         border: '0.5px solid rgba(14,165,233,0.18)',
         borderRadius: 16,
-        padding: '18px 22px 22px',
+        padding: isMobileLayout ? '16px 12px' : '18px 22px 22px',
         backdropFilter: 'var(--sr-blur)',
         WebkitBackdropFilter: 'var(--sr-blur)',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobileLayout ? 'flex-start' : 'center', flexDirection: isMobileLayout ? 'column' : 'row', gap: 8, marginBottom: 14 }}>
           <span style={{
             fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',
             textTransform: 'uppercase', color: 'var(--sr-text-sub)',
@@ -544,7 +617,7 @@ export default function StudentResources() {
           <EmptyState subject={activeTab} subjectMap={subjectMap} />
         ) : (
           <>
-            <TableHeader />
+            <TableHeader isMobile={isMobileLayout} />
             {displayFiles.map(item => (
               <FileRow
                 key={item.id}
@@ -552,6 +625,7 @@ export default function StudentResources() {
                 subjectMap={subjectMap}
                 onPreview={handlePreview}
                 onDownload={handleDownload}
+                isMobile={isMobileLayout}
               />
             ))}
           </>

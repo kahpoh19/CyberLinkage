@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 
 from database import engine, Base
-from routers import auth, chat, diagnosis, graph, path, profile, question_bank, report, sandbox_ai, subjects
+from routers import auth, chat, client, diagnosis, graph, path, profile, question_bank, report, sandbox_ai, subjects
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -93,6 +93,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(client.router)
 app.include_router(diagnosis.router)
 app.include_router(graph.router)
 app.include_router(path.router)

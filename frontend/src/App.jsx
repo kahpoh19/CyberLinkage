@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import {
-  Layout, Menu, Typography, Avatar, Button, Modal, Form, Input,
+  Layout, Menu, Typography, Avatar, Button, Modal, Form, Input, Drawer,
   message, Radio, Tag, Dropdown, Select, Popconfirm, Tooltip,
 } from 'antd'
 import DashboardOutlined from '@ant-design/icons/es/icons/DashboardOutlined'
@@ -20,6 +20,7 @@ import PlusOutlined from '@ant-design/icons/es/icons/PlusOutlined'
 import DeleteOutlined from '@ant-design/icons/es/icons/DeleteOutlined'
 import WarningOutlined from '@ant-design/icons/es/icons/WarningOutlined'
 import DownOutlined from '@ant-design/icons/es/icons/DownOutlined'
+import MenuOutlined from '@ant-design/icons/es/icons/MenuOutlined'
 
 import Dashboard from './pages/Dashboard'
 import Diagnosis from './pages/Diagnosis'
@@ -32,7 +33,7 @@ import Sandbox from './pages/Sandbox'
 import Profile from './pages/Profile'
 import useUserStore from './store/userStore'
 import { getSubjectTheme, getSubjectTagStyle } from './utils/subjectTheme'
-import { login, register, getMe } from './api'
+import { login, register, getDeviceContext, getMe } from './api'
 import UserOutlined from '@ant-design/icons/es/icons/UserOutlined'
 import { getAvatarUrl, getDisplayName } from './utils/user'
 
@@ -75,7 +76,9 @@ function getPageThemeKey(pathname) {
 
 // ── 实战工坊路由守卫 ──────────────────────────────────────────────
 function SandboxRoute({ children }) {
+  const navigate = useNavigate()
   const currentSubject = useUserStore(s => s.currentSubject)
+  const isMobileLayout = useUserStore(s => s.deviceInfo?.isMobileLayout)
   if (currentSubject !== 'mechanics') {
     return (
       <div style={{ textAlign: 'center', marginTop: 120, padding: '0 24px' }}>
@@ -86,6 +89,20 @@ function SandboxRoute({ children }) {
         </Text>
         <br /><br />
         <Navigate to="/" replace />
+      </div>
+    )
+  }
+  if (isMobileLayout) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: 80, padding: '0 24px' }}>
+        <div style={{ fontSize: 46, marginBottom: 16 }}>📱</div>
+        <Title level={3}>实战工坊暂不建议在移动端编辑</Title>
+        <Text type="secondary" style={{ fontSize: 15 }}>
+          该模块包含拖拽建模、画布缩放和机构参数面板，当前已对全站做移动端适配，但实战工坊编辑器仍建议在桌面端使用。
+        </Text>
+        <div style={{ marginTop: 20 }}>
+          <Button type="primary" onClick={() => navigate('/')}>返回首页</Button>
+        </div>
       </div>
     )
   }
@@ -153,7 +170,7 @@ function AddSubjectModal({ open, onClose, onAdd }) {
 }
 
 
-function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDark }) {
+function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDark, isMobileLayout }) {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const [hoveredId, setHoveredId] = useState(null)
@@ -191,6 +208,7 @@ function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDar
           fontSize: 15,
           flexShrink: 0,
           marginRight: 2,
+          display: isMobileLayout ? 'none' : 'inline-flex',
         }}
       />
 
@@ -201,8 +219,9 @@ function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDar
           display: 'inline-flex',
           alignItems: 'center',
           gap: 10,
-          minWidth: 180,
-          maxWidth: 260,
+          minWidth: isMobileLayout ? 0 : 180,
+          maxWidth: isMobileLayout ? '100%' : 260,
+          width: isMobileLayout ? '100%' : 'auto',
           height: 36,
           padding: '0 14px',
           borderRadius: 12,
@@ -242,8 +261,9 @@ function SubjectBar({ subjects, currentSubject, onSelect, onAdd, onRemove, isDar
           style={{
             position: 'absolute',
             top: 'calc(100% + 10px)',
-            left: 24,
-            width: 320,
+            left: isMobileLayout ? 0 : 24,
+            right: isMobileLayout ? 0 : 'auto',
+            width: isMobileLayout ? '100%' : 320,
             maxHeight: 420,
             overflowY: 'auto',
             padding: 12,
@@ -501,11 +521,13 @@ export default function App() {
     discoMode, activateDisco, openAuthModal,
     currentSubject, setCurrentSubject,
     subjects, addSubject, removeSubject,
+    deviceInfo, setDeviceInfo,
   } = useUserStore()
 
   const [siderCollapsed, setSiderCollapsed] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 992
   )
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const isDark = resolvedTheme === 'dark'
   const longPressTimer = useRef(null)
   const longPressTriggered = useRef(false)
@@ -513,6 +535,8 @@ export default function App() {
   const overlayRef = useRef(null)
   const hasToken = isAuthenticated()
   const isTeacher = user?.role === 'teacher'
+  const isMobileLayout = deviceInfo?.isMobileLayout
+  const isCompactLayout = deviceInfo?.isCompactLayout
 
   // 实战工坊仅机械原理可见
   const visibleMenuItems = menuItems.filter((item) => {
@@ -533,6 +557,26 @@ export default function App() {
   }, [hasToken, user, setUser, logout])
 
   useEffect(() => {
+    let cancelled = false
+
+    getDeviceContext()
+      .then((res) => {
+        if (cancelled) return
+        setDeviceInfo({
+          serverDeviceType: res.data?.device_type,
+          serverPlatform: res.data?.platform,
+          serverBrowser: res.data?.browser,
+          detectionSource: res.data?.detected_from,
+        })
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [setDeviceInfo])
+
+  useEffect(() => {
     if (discoMode) {
       let i = 0
       discoIntervalRef.current = setInterval(() => {
@@ -548,6 +592,13 @@ export default function App() {
     }
     return () => clearInterval(discoIntervalRef.current)
   }, [discoMode])
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+    if (isMobileLayout) {
+      setSiderCollapsed(true)
+    }
+  }, [location.pathname, isMobileLayout])
 
   const handleThemePressStart = () => {
     longPressTriggered.current = false
@@ -587,6 +638,7 @@ export default function App() {
       : <SunOutlined style={{ fontSize: 18, color: '#faad14' }} />
 
   const siderWidth = siderCollapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH
+  const desktopMarginLeft = isMobileLayout ? 0 : siderWidth
 
   const userMenuItems = [
     {
@@ -607,11 +659,28 @@ export default function App() {
 
   const pageThemeKey = getPageThemeKey(location.pathname)
   const currentTheme = getSubjectTheme(currentSubject)
+  const handleMenuNavigate = ({ key }) => {
+    setMobileNavOpen(false)
+    if (key === BANANA_SLIDES_PATH) {
+      window.location.assign(BANANA_SLIDES_PATH)
+      return
+    }
+    navigate(key)
+  }
+  const menuNode = (
+    <Menu
+      mode="inline"
+      theme={isDark ? 'dark' : 'light'}
+      selectedKeys={[location.pathname]}
+      items={visibleMenuItems}
+      onClick={handleMenuNavigate}
+    />
+  )
 
   return (
     <Layout
       className={`cy-app-shell page-theme-${pageThemeKey}`}
-      style={{ minHeight: '100vh', position: 'relative' }}
+      style={{ minHeight: '100dvh', position: 'relative' }}
     >
       <div
         ref={overlayRef}
@@ -630,7 +699,11 @@ export default function App() {
           textAlign: 'center', padding: '6px 0',
           background: 'linear-gradient(90deg,#ff0080,#ffd700,#00ff88,#00cfff,#bf00ff,#ff0080)',
           backgroundSize: '200% 100%', animation: 'discoSlide 1s linear infinite',
-          fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: 4, pointerEvents: 'none',
+          fontSize: isMobileLayout ? 12 : 14,
+          fontWeight: 600,
+          color: '#fff',
+          letterSpacing: isMobileLayout ? 2 : 4,
+          pointerEvents: 'none',
         }}>
           🕺 DISCO MODE 🕺
         </div>
@@ -641,7 +714,7 @@ export default function App() {
           position: 'fixed', inset: 0, display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 9998, pointerEvents: 'none',
         }}>
-          <img src="/disco.gif" alt="disco" style={{ width: 320, borderRadius: 16, opacity: 0.92 }} />
+          <img src="/disco.gif" alt="disco" style={{ width: isMobileLayout ? 220 : 320, borderRadius: 16, opacity: 0.92 }} />
         </div>
       )}
 
@@ -697,47 +770,64 @@ export default function App() {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+
+  .cy-mobile-drawer .ant-drawer-body {
+    padding: 0;
+    background: ${isDark ? 'rgba(10,13,20,0.96)' : 'rgba(255,255,255,0.96)'};
+  }
 `}</style>
 
-      <Sider
-        className="cy-app-sider"
-        breakpoint="lg"
-        width={SIDER_WIDTH}
-        collapsedWidth={SIDER_COLLAPSED_WIDTH}
-        collapsed={siderCollapsed}
-        onCollapse={setSiderCollapsed}
-        theme={isDark ? 'dark' : 'light'}
-        style={{ position: 'fixed', top: 0, bottom: 0, left: 0, height: '100vh', overflowY: 'auto', zIndex: 20 }}
-      >
-        <div style={{ padding: '16px', textAlign: 'center' }}>
-          <Title level={4} style={{ margin: 0, color: discoMode ? '#ff0080' : '#1677ff', transition: 'color 0.15s' }}>
-            {discoMode ? '🕺 CyberLinkage' : '🧠 CyberLinkage'}
-          </Title>
-        </div>
-        <Menu
-          mode="inline"
+      {!isMobileLayout && (
+        <Sider
+          className="cy-app-sider"
+          breakpoint="lg"
+          width={SIDER_WIDTH}
+          collapsedWidth={SIDER_COLLAPSED_WIDTH}
+          collapsed={siderCollapsed}
+          onCollapse={setSiderCollapsed}
           theme={isDark ? 'dark' : 'light'}
-          selectedKeys={[location.pathname]}
-          items={visibleMenuItems}
-          onClick={({ key }) => {
-            if (key === BANANA_SLIDES_PATH) {
-              window.location.assign(BANANA_SLIDES_PATH)
-              return
-            }
-            navigate(key)
-          }}
-        />
-      </Sider>
+          style={{ position: 'fixed', top: 0, bottom: 0, left: 0, height: '100dvh', overflowY: 'auto', zIndex: 20 }}
+        >
+          <div style={{ padding: '16px', textAlign: 'center' }}>
+            <Title level={4} style={{ margin: 0, color: discoMode ? '#ff0080' : '#1677ff', transition: 'color 0.15s' }}>
+              {discoMode ? '🕺 CyberLinkage' : '🧠 CyberLinkage'}
+            </Title>
+          </div>
+          {menuNode}
+        </Sider>
+      )}
+
+      {isMobileLayout && (
+        <Drawer
+          className="cy-mobile-drawer"
+          placement="left"
+          width={284}
+          closable={false}
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          styles={{ body: { padding: 0 } }}
+        >
+          <div style={{ padding: '18px 18px 12px' }}>
+            <Title level={4} style={{ margin: 0, color: discoMode ? '#ff0080' : '#1677ff' }}>
+              {discoMode ? '🕺 CyberLinkage' : '🧠 CyberLinkage'}
+            </Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {deviceInfo?.deviceLabel || '移动端'}
+            </Text>
+          </div>
+          {menuNode}
+        </Drawer>
+      )}
 
       <Layout
         className="cy-main-layout"
-        style={{ marginLeft: siderWidth, minHeight: '100vh', transition: 'margin-left 0.2s' }}
+        style={{ marginLeft: desktopMarginLeft, minHeight: '100dvh', transition: 'margin-left 0.2s' }}
       >
         <Header
           className="cy-app-header"
           style={{
             background: 'var(--cy-header-bg)',
-            padding: '0 16px 0 20px',
+            padding: isMobileLayout ? '12px' : '0 16px 0 20px',
             display: 'flex',
             flexWrap: 'wrap',
             gap: 10,
@@ -751,25 +841,35 @@ export default function App() {
             lineHeight: 1,
           }}
         >
-          {/* ── 科目栏（带渐变色 + 增删） ───────────────────────── */}
-          <SubjectBar
-            subjects={subjects}
-            currentSubject={currentSubject}
-            onSelect={(id) => {
-              setCurrentSubject(id)
-              // 如果当前在实战工坊但切换到非机械原理，重定向
-              if (location.pathname === '/sandbox' && id !== 'mechanics') {
-                navigate('/')
-                message.info('实战工坊功能目前仅针对机械原理学科开放，已自动返回首页。')
-              }
-            }}
-            onAdd={addSubject}
-            onRemove={handleRemoveSubject}
-            isDark={isDark}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, width: isMobileLayout ? '100%' : 'auto' }}>
+            {isMobileLayout && (
+              <Button
+                type="text"
+                shape="circle"
+                icon={<MenuOutlined />}
+                onClick={() => setMobileNavOpen(true)}
+                style={{ flexShrink: 0 }}
+              />
+            )}
+            <SubjectBar
+              subjects={subjects}
+              currentSubject={currentSubject}
+              onSelect={(id) => {
+                setCurrentSubject(id)
+                if (location.pathname === '/sandbox' && id !== 'mechanics') {
+                  navigate('/')
+                  message.info('实战工坊功能目前仅针对机械原理学科开放，已自动返回首页。')
+                }
+              }}
+              onAdd={addSubject}
+              onRemove={handleRemoveSubject}
+              isDark={isDark}
+              isMobileLayout={isMobileLayout}
+            />
+          </div>
 
           {/* ── 右侧操作区 ─────────────────────────────────────── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: isMobileLayout ? 'auto' : 0 }}>
             <Button
               type="text"
               shape="circle"
@@ -792,7 +892,7 @@ export default function App() {
 
             {isAuthenticated() ? (
               <>
-                {user?.role === 'teacher' && (
+                {user?.role === 'teacher' && !isCompactLayout && (
                   <Tag color="blue" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', height: 24 }}>
                     👨‍🏫 Teacher Mode
                   </Tag>
@@ -819,7 +919,9 @@ export default function App() {
                 </Dropdown>
               </>
             ) : (
-              <Button type="primary" onClick={openAuthModal}>登录</Button>
+              <Button type="primary" onClick={openAuthModal} size={isMobileLayout ? 'middle' : 'middle'}>
+                登录
+              </Button>
             )}
           </div>
         </Header>

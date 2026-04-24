@@ -5,12 +5,14 @@ import { ConfigProvider, theme as antTheme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import useUserStore from './store/userStore'
+import { getClientDeviceInfo } from './utils/device'
 import './index.css'
 
 function Root() {
   const themeMode = useUserStore((s) => s.theme)
   const resolvedTheme = useUserStore((s) => s.resolvedTheme)
   const syncSystemTheme = useUserStore((s) => s.syncSystemTheme)
+  const setDeviceInfo = useUserStore((s) => s.setDeviceInfo)
 
   useEffect(() => {
     syncSystemTheme()
@@ -28,6 +30,19 @@ function Root() {
     media.addListener(handleChange)
     return () => media.removeListener(handleChange)
   }, [themeMode, syncSystemTheme])
+
+  useEffect(() => {
+    const syncDevice = () => setDeviceInfo(getClientDeviceInfo())
+
+    syncDevice()
+    window.addEventListener('resize', syncDevice)
+    window.addEventListener('orientationchange', syncDevice)
+
+    return () => {
+      window.removeEventListener('resize', syncDevice)
+      window.removeEventListener('orientationchange', syncDevice)
+    }
+  }, [setDeviceInfo])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', resolvedTheme)
