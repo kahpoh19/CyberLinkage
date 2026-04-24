@@ -64,9 +64,9 @@ function getRelatedFileScore(file, searchPhrases) {
   }, 0)
 }
 
-function SectionTitle({ children }) {
+function SectionTitle({ children, color = '#111827' }) {
   return (
-    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#111827' }}>
+    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color }}>
       {children}
     </div>
   )
@@ -77,10 +77,17 @@ export default function KnowledgeGraph() {
   const currentSubject = useUserStore((s) => s.currentSubject)
   const subjects = useUserStore((s) => s.subjects)
   const resolvedTheme = useUserStore((s) => s.resolvedTheme)
+  const isDark = resolvedTheme === 'dark'
   const isMobileLayout = useUserStore((s) => s.deviceInfo?.isMobileLayout)
   const subjectLabel = subjects.find(s => s.id === currentSubject)?.label || currentSubject
   const files = useTeacherStore((s) => s.files)
   const getBlobUrl = useTeacherStore((s) => s.getBlobUrl)
+  const pageTitleColor = isDark ? 'rgba(248, 250, 252, 0.96)' : '#111827'
+  const pageTextColor = isDark ? 'rgba(226, 232, 240, 0.92)' : '#1f2937'
+  const pageMutedColor = isDark ? 'rgba(148, 163, 184, 0.9)' : '#6b7280'
+  const pageHintColor = isDark ? 'rgba(196, 181, 253, 0.82)' : '#999'
+  const resourceCardBorder = isDark ? '1px solid rgba(148, 163, 184, 0.18)' : '1px solid rgba(15, 23, 42, 0.08)'
+  const resourceCardBg = isDark ? 'rgba(15, 23, 42, 0.72)' : 'rgba(248, 250, 252, 0.9)'
 
   const [graphData, setGraphData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -184,7 +191,7 @@ export default function KnowledgeGraph() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobileLayout ? 'stretch' : 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap', flexDirection: isMobileLayout ? 'column' : 'row' }}>
-        <Title level={4} style={{ margin: 0 }}>
+        <Title level={4} style={{ margin: 0, color: pageTitleColor }}>
           🗺️ {subjectLabel} 知识图谱
         </Title>
         <Segmented
@@ -200,7 +207,7 @@ export default function KnowledgeGraph() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
         <Card size="small" bodyStyle={{ padding: 16 }}>
-          <SectionTitle>重点梳理</SectionTitle>
+          <SectionTitle color={pageTitleColor}>重点梳理</SectionTitle>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             <Tag color="blue">总知识点 {graphOverview.totalNodes}</Tag>
             <Tag color="cyan">章节 {graphOverview.chapterCount}</Tag>
@@ -208,7 +215,7 @@ export default function KnowledgeGraph() {
             <Tag color="gold">学习中 {graphOverview.learningCount}</Tag>
             <Tag color="red">待关注 {graphOverview.weakCount}</Tag>
           </div>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 10 }}>
+          <Text style={{ display: 'block', marginBottom: 10, color: pageMutedColor }}>
             点击下列知识点可直接打开详情、跳答疑，或整理成 PPT 草稿。
           </Text>
           <Space wrap>
@@ -226,8 +233,8 @@ export default function KnowledgeGraph() {
         </Card>
 
         <Card size="small" bodyStyle={{ padding: 16 }}>
-          <SectionTitle>跨模块联动</SectionTitle>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12, lineHeight: 1.7 }}>
+          <SectionTitle color={pageTitleColor}>跨模块联动</SectionTitle>
+          <Text style={{ display: 'block', marginBottom: 12, lineHeight: 1.7, color: pageMutedColor }}>
             可以直接把当前图谱或某个知识点整理成蕉幻 PPT 的可编辑草稿，进入后继续修改再生成。
           </Text>
           <Space wrap>
@@ -248,7 +255,7 @@ export default function KnowledgeGraph() {
         <Tag color="#faad14">🟡 学习中</Tag>
         <Tag color="#52c41a">🟢 已掌握</Tag>
         <Tag color="#999">⚪ 未测试</Tag>
-        <span style={{ marginLeft: 16, fontSize: 12, color: '#999' }}>
+        <span style={{ marginLeft: 16, fontSize: 12, color: pageHintColor }}>
           💡 拖动画布 / 滚轮缩放，点击知识点查看详情与资料
         </span>
       </div>
@@ -298,7 +305,7 @@ export default function KnowledgeGraph() {
 
             <Divider />
 
-            <SectionTitle>核心要点</SectionTitle>
+            <SectionTitle color={pageTitleColor}>核心要点</SectionTitle>
             {selectedCorePoints.length ? (
               <div style={{ display: 'grid', gap: 8 }}>
                 {selectedCorePoints.map(point => (
@@ -321,7 +328,7 @@ export default function KnowledgeGraph() {
 
             <Divider />
 
-            <SectionTitle>前置知识</SectionTitle>
+            <SectionTitle color={pageTitleColor}>前置知识</SectionTitle>
             {selectedRelations.prerequisites.length ? (
               <Space wrap>
                 {selectedRelations.prerequisites.map(node => (
@@ -331,12 +338,12 @@ export default function KnowledgeGraph() {
                 ))}
               </Space>
             ) : (
-              <Text type="secondary">暂无明显前置知识。</Text>
+              <Text style={{ color: pageMutedColor }}>暂无明显前置知识。</Text>
             )}
 
             <Divider />
 
-            <SectionTitle>后续可衔接</SectionTitle>
+            <SectionTitle color={pageTitleColor}>后续可衔接</SectionTitle>
             {selectedRelations.unlocks.length ? (
               <Space wrap>
                 {selectedRelations.unlocks.map(node => (
@@ -346,12 +353,12 @@ export default function KnowledgeGraph() {
                 ))}
               </Space>
             ) : (
-              <Text type="secondary">暂无直接后继知识点。</Text>
+              <Text style={{ color: pageMutedColor }}>暂无直接后继知识点。</Text>
             )}
 
             <Divider />
 
-            <SectionTitle>相关资料</SectionTitle>
+            <SectionTitle color={pageTitleColor}>相关资料</SectionTitle>
             {relatedFiles.length ? (
               <div style={{ display: 'grid', gap: 10 }}>
                 {relatedFiles.map(file => (
@@ -360,17 +367,17 @@ export default function KnowledgeGraph() {
                     style={{
                       padding: 12,
                       borderRadius: 12,
-                      border: '1px solid rgba(15, 23, 42, 0.08)',
-                      background: 'rgba(248, 250, 252, 0.9)',
+                      border: resourceCardBorder,
+                      background: resourceCardBg,
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexDirection: isMobileLayout ? 'column' : 'row' }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: '#111827', wordBreak: 'break-all' }}>
+                        <div style={{ fontWeight: 600, color: pageTextColor, wordBreak: 'break-all' }}>
                           <FileTextOutlined style={{ marginRight: 8 }} />
                           {file.name}
                         </div>
-                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                        <div style={{ fontSize: 12, color: pageMutedColor, marginTop: 4 }}>
                           匹配度 {file._score} · {subjectLabel}
                         </div>
                       </div>
@@ -387,7 +394,7 @@ export default function KnowledgeGraph() {
                 ))}
               </div>
             ) : (
-              <Text type="secondary">
+              <Text style={{ color: pageMutedColor }}>
                 当前还没有和该知识点明显匹配的已发布资料。你可以先从上面的 PPT 草稿入口整理一份新的讲解内容。
               </Text>
             )}
