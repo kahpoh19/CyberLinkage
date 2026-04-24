@@ -23,6 +23,14 @@ QUESTION_TYPE_CONFIG = {
         "label": "单选题",
         "option_keys": ["A", "B", "C", "D"],
     },
+    "yes_no": {
+        "label": "是非题",
+        "option_keys": ["A", "B"],
+        "fixed_options": {
+            "A": "是",
+            "B": "非",
+        },
+    },
     "true_false": {
         "label": "判断题",
         "option_keys": ["A", "B"],
@@ -33,7 +41,7 @@ QUESTION_TYPE_CONFIG = {
 def _normalize_question_type(value: Optional[str]) -> str:
     normalized = str(value or DEFAULT_QUESTION_TYPE).strip().lower()
     if normalized not in QUESTION_TYPE_CONFIG:
-        raise ValueError("question_type 仅支持 single_choice 或 true_false")
+        raise ValueError("question_type 仅支持 single_choice、yes_no 或 true_false")
     return normalized
 
 
@@ -105,7 +113,15 @@ class GeneratedQuestionOut(BaseModel):
 
     @model_validator(mode="after")
     def validate_question_shape(self):
-        option_keys = QUESTION_TYPE_CONFIG[self.question_type]["option_keys"]
+        type_config = QUESTION_TYPE_CONFIG[self.question_type]
+        option_keys = type_config["option_keys"]
+
+        if self.question_type == "yes_no":
+            self.options = {
+                "A": "是",
+                "B": "非",
+            }
+
         option_map = {
             key: str((self.options or {}).get(key, "")).strip()
             for key in option_keys
@@ -117,12 +133,12 @@ class GeneratedQuestionOut(BaseModel):
             raise ValueError("question_text 不能为空")
         if any(not option_map[key] for key in option_keys):
             raise ValueError(
-                f"{QUESTION_TYPE_CONFIG[self.question_type]['label']}的 options 必须完整包含 "
+                f"{type_config['label']}的 options 必须完整包含 "
                 + "/".join(option_keys)
             )
         if self.correct_answer not in option_keys:
             raise ValueError(
-                f"{QUESTION_TYPE_CONFIG[self.question_type]['label']}的 correct_answer 必须是 "
+                f"{type_config['label']}的 correct_answer 必须是 "
                 + "/".join(option_keys)
             )
 

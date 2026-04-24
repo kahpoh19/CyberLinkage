@@ -37,6 +37,7 @@ const TEXTAREA_STYLE = {
 
 const QUESTION_TYPE_OPTIONS = [
   { value: 'single_choice', label: '单选题' },
+  { value: 'yes_no', label: '是非题' },
   { value: 'true_false', label: '判断题' },
 ]
 
@@ -72,24 +73,45 @@ const getApiErrorMessage = error =>
 const getQuestionTypeLabel = type =>
   QUESTION_TYPE_LABELS[type] || QUESTION_TYPE_LABELS.single_choice
 
-const normalizeQuestionType = type =>
-  type === 'true_false' ? 'true_false' : 'single_choice'
+const normalizeQuestionType = type => {
+  const normalized = String(type || '').trim()
+  return ['single_choice', 'yes_no', 'true_false'].includes(normalized)
+    ? normalized
+    : 'single_choice'
+}
 
 const getQuestionOptionKeys = questionType =>
-  normalizeQuestionType(questionType) === 'true_false'
-    ? ['A', 'B']
-    : ['A', 'B', 'C', 'D']
+  normalizeQuestionType(questionType) === 'single_choice'
+    ? ['A', 'B', 'C', 'D']
+    : ['A', 'B']
 
-function createQuestionOptions(questionType, rawOptions = {}, trimValues = false) {
+const isFixedYesNoQuestion = questionType =>
+  normalizeQuestionType(questionType) === 'yes_no'
+
+function createQuestionOptions(
+  questionType,
+  rawOptions = {},
+  trimValues = false,
+  sourceQuestionType = questionType,
+) {
   const normalizedType = normalizeQuestionType(questionType)
+  const normalizedSourceType = normalizeQuestionType(sourceQuestionType)
+
+  if (isFixedYesNoQuestion(normalizedType)) {
+    return {
+      A: '是',
+      B: '非',
+    }
+  }
+
   const optionKeys = getQuestionOptionKeys(normalizedType)
+  const shouldResetOptions = normalizedType !== normalizedSourceType
+    && (isFixedYesNoQuestion(normalizedType) || isFixedYesNoQuestion(normalizedSourceType))
+  const safeOptions = shouldResetOptions ? {} : (rawOptions || {})
   const nextOptions = {}
 
-  optionKeys.forEach((key, index) => {
-    const fallback = normalizedType === 'true_false'
-      ? (index === 0 ? '正确' : '错误')
-      : ''
-    const resolvedValue = String(rawOptions?.[key] ?? rawOptions?.[key.toLowerCase()] ?? fallback)
+  optionKeys.forEach(key => {
+    const resolvedValue = String(safeOptions?.[key] ?? safeOptions?.[key.toLowerCase()] ?? '')
     nextOptions[key] = trimValues ? resolvedValue.trim() : resolvedValue
   })
 
@@ -450,7 +472,7 @@ function QuestionEditorFields({
               const nextOptionKeys = getQuestionOptionKeys(nextType)
               updateDraft({
                 question_type: nextType,
-                options: createQuestionOptions(nextType, question.options),
+                options: createQuestionOptions(nextType, question.options, false, question.question_type),
                 correct_answer: nextOptionKeys.includes(question.correct_answer)
                   ? question.correct_answer
                   : nextOptionKeys[0],
@@ -499,7 +521,7 @@ function QuestionEditorFields({
               <label style={{ ...FIELD_LABEL_STYLE, marginBottom: 6 }}>{key} 选项</label>
               <input
                 type="text"
-                disabled={disabled}
+                disabled={disabled || isFixedYesNoQuestion(question.question_type)}
                 value={question.options?.[key] || ''}
                 onChange={event => updateDraft({
                   options: {
@@ -508,8 +530,16 @@ function QuestionEditorFields({
                   },
                 })}
                 onKeyDown={event => event.stopPropagation()}
-                style={INPUT_STYLE}
-                placeholder={`请输入 ${key} 选项`}
+                style={{
+                  ...INPUT_STYLE,
+                  opacity: isFixedYesNoQuestion(question.question_type) ? 0.72 : 1,
+                  cursor: isFixedYesNoQuestion(question.question_type) ? 'not-allowed' : 'text',
+                }}
+                placeholder={
+                  isFixedYesNoQuestion(question.question_type)
+                    ? '是非题选项固定为“是 / 非”'
+                    : `请输入 ${key} 选项`
+                }
               />
             </div>
           ))}

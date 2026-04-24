@@ -30,12 +30,17 @@ QUESTION_TYPE_CONFIG = {
     "single_choice": {
         "label": "单选题",
         "option_keys": ["A", "B", "C", "D"],
-        "instruction": "题型必须是单选题，options 必须完整包含 A/B/C/D 四个选项，correct_answer 只能有一个，且必须是 A/B/C/D 中的一个。",
+        "instruction": "题型必须是单选题，question_type 固定为 single_choice；options 必须完整包含 A/B/C/D 四个选项，correct_answer 只能有一个，且必须是 A/B/C/D 中的一个。",
+    },
+    "yes_no": {
+        "label": "是非题",
+        "option_keys": ["A", "B"],
+        "instruction": "题型必须是是非题，question_type 固定为 yes_no；options 必须固定为 {\"A\": \"是\", \"B\": \"非\"}，correct_answer 只能是 A 或 B。",
     },
     "true_false": {
         "label": "判断题",
         "option_keys": ["A", "B"],
-        "instruction": "题型必须是判断题，options 只需要包含 A/B 两个选项，建议使用“正确 / 错误”或语义等价表达，correct_answer 只能是 A 或 B。",
+        "instruction": "题型必须是判断题，question_type 固定为 true_false；options 只需要包含 A/B 两个选项，但 A/B 的内容可以根据题意自定义为完整句子，correct_answer 只能是 A 或 B。",
     },
 }
 
@@ -56,7 +61,7 @@ def _normalize_question_type(question_type: Optional[str]) -> str:
     normalized = str(question_type or DEFAULT_QUESTION_TYPE).strip().lower()
     if normalized not in QUESTION_TYPE_CONFIG:
         raise QuestionBankGeneratorInputError(
-            "question_type 仅支持 single_choice 或 true_false"
+            "question_type 仅支持 single_choice、yes_no 或 true_false"
         )
     return normalized
 
@@ -458,7 +463,15 @@ class QuestionBankGenerator:
         index: int,
         question_type: str,
     ) -> Dict[str, str]:
-        option_keys = QUESTION_TYPE_CONFIG[_normalize_question_type(question_type)]["option_keys"]
+        normalized_question_type = _normalize_question_type(question_type)
+
+        if normalized_question_type == "yes_no":
+            return {
+                "A": "是",
+                "B": "非",
+            }
+
+        option_keys = QUESTION_TYPE_CONFIG[normalized_question_type]["option_keys"]
 
         if isinstance(raw_options, list):
             if len(raw_options) != len(option_keys):

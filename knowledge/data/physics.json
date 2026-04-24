@@ -1,0 +1,78 @@
+{
+  "course": "physics",
+  "name": "大学物理",
+  "nodes": [
+    {
+      "id": "intro_physics",
+      "name": "物理学概述与基本方法",
+      "category": "绪论",
+      "difficulty": 1,
+      "chapter": 1,
+      "description": "了解物理学的研究对象、基本概念和科学方法。",
+      "estimated_minutes": 30
+    },
+    {
+      "id": "newton_laws",
+      "name": "牛顿运动定律",
+      "category": "力学",
+      "difficulty": 2,
+      "chapter": 2,
+      "description": "掌握牛顿第一、第二、第三定律及其在直线运动中的应用。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "thermodynamics",
+      "name": "热学基础",
+      "category": "热学",
+      "difficulty": 3,
+      "chapter": 3,
+      "description": "理解温度、热量、热容以及热力学第一定律的基本概念。",
+      "estimated_minutes": 50
+    },
+    {
+      "id": "electricity_basics",
+      "name": "电学基本概念",
+      "category": "电学",
+      "difficulty": 3,
+      "chapter": 4,
+      "description": "学习电荷、电场、电势以及欧姆定律的基本原理。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "ideal_gas_law",
+      "name": "理想气体状态方程 (PV=nRT)",
+      "category": "气体性质",
+      "difficulty": 4,
+      "chapter": 5,
+      "description": "掌握理想气体状态方程的推导、适用范围及应用。",
+      "estimated_minutes": 40
+    }
+  ],
+  "edges": [
+    {
+      "from": "intro_physics",
+      "to": "newton_laws",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "newton_laws",
+      "to": "thermodynamics",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "intro_physics",
+      "to": "electricity_basics",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "thermodynamics",
+      "to": "ideal_gas_law",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "electricity_basics",
+      "to": "ideal_gas_law",
+      "relation": "prerequisite"
+    }
+  ]
+}

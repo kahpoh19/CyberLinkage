@@ -1,0 +1,78 @@
+{
+  "course": "thermo",
+  "name": "工程热力学",
+  "nodes": [
+    {
+      "id": "basic_concepts",
+      "name": "基本概念与定义",
+      "category": "基础概念",
+      "difficulty": 1,
+      "chapter": 1,
+      "description": "介绍系统、环境、状态参量、平衡等基本概念。",
+      "estimated_minutes": 30
+    },
+    {
+      "id": "first_law",
+      "name": "热力学第一定律",
+      "category": "能量守恒",
+      "difficulty": 2,
+      "chapter": 2,
+      "description": "阐述能量守恒在闭合系统中的表达式及功、热的形式。",
+      "estimated_minutes": 45
+    },
+    {
+      "id": "ideal_gas_process",
+      "name": "理想气体的性质与热力学过程",
+      "category": "气体模型",
+      "difficulty": 3,
+      "chapter": 3,
+      "description": "利用理想气体状态方程分析等压、等容、等温、绝热过程。",
+      "estimated_minutes": 50
+    },
+    {
+      "id": "second_law",
+      "name": "热力学第二定律",
+      "category": "熵概念",
+      "difficulty": 4,
+      "chapter": 4,
+      "description": "介绍熵、不可逆性及克劳修斯、开尔文-普朗克表述。",
+      "estimated_minutes": 55
+    },
+    {
+      "id": "steam_cycle",
+      "name": "水蒸气与动力循环",
+      "category": "实际系统",
+      "difficulty": 4,
+      "chapter": 5,
+      "description": "分析蒸汽轮机、Rankine循环及其热效率计算。",
+      "estimated_minutes": 60
+    }
+  ],
+  "edges": [
+    {
+      "from": "basic_concepts",
+      "to": "first_law",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "first_law",
+      "to": "ideal_gas_process",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "basic_concepts",
+      "to": "second_law",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "second_law",
+      "to": "steam_cycle",
+      "relation": "prerequisite"
+    },
+    {
+      "from": "ideal_gas_process",
+      "to": "steam_cycle",
+      "relation": "prerequisite"
+    }
+  ]
+}
