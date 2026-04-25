@@ -3,9 +3,30 @@ import { Avatar, Typography } from 'antd'
 import UserOutlined from '@ant-design/icons/es/icons/UserOutlined'
 import RobotOutlined from '@ant-design/icons/es/icons/RobotOutlined'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import useUserStore from '../store/userStore'
 
 const { Text } = Typography
+const htmlBreakPattern = /^<br\s*\/?>$/i
+
+function remarkHtmlLineBreaks() {
+  return (tree) => {
+    replaceHtmlBreaks(tree)
+  }
+}
+
+function replaceHtmlBreaks(node) {
+  if (!node || !Array.isArray(node.children)) return
+
+  node.children = node.children.map((child) => {
+    if (child?.type === 'html' && htmlBreakPattern.test(String(child.value || '').trim())) {
+      return { type: 'break' }
+    }
+
+    replaceHtmlBreaks(child)
+    return child
+  })
+}
 
 /**
  * 聊天气泡组件
@@ -58,6 +79,7 @@ export default function ChatBubble({ message, isUser, timestamp, isStreaming = f
         ) : (
           <div style={{ color: aiTextColor }}>
             <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkHtmlLineBreaks]}
               components={{
                 p: ({ children }) => (
                   <p style={{ margin: '0 0 10px', lineHeight: 1.75 }}>{children}</p>
@@ -105,6 +127,52 @@ export default function ChatBubble({ message, isUser, timestamp, isStreaming = f
                 ),
                 strong: ({ children }) => (
                   <strong style={{ color: '#111827' }}>{children}</strong>
+                ),
+                table: ({ children }) => (
+                  <div style={{ margin: '0 0 12px', overflowX: 'auto' }}>
+                    <table
+                      style={{
+                        width: '100%',
+                        minWidth: isMobileLayout ? 320 : 420,
+                        borderCollapse: 'collapse',
+                        border: '1px solid rgba(148, 163, 184, 0.45)',
+                        background: '#fff',
+                        fontSize: 13,
+                      }}
+                    >
+                      {children}
+                    </table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead style={{ background: 'rgba(241, 245, 249, 0.95)' }}>{children}</thead>
+                ),
+                th: ({ align, children }) => (
+                  <th
+                    style={{
+                      padding: '8px 10px',
+                      border: '1px solid rgba(148, 163, 184, 0.45)',
+                      color: '#0f172a',
+                      fontWeight: 700,
+                      textAlign: align || 'left',
+                      verticalAlign: 'top',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {children}
+                  </th>
+                ),
+                td: ({ align, children }) => (
+                  <td
+                    style={{
+                      padding: '8px 10px',
+                      border: '1px solid rgba(148, 163, 184, 0.38)',
+                      textAlign: align || 'left',
+                      verticalAlign: 'top',
+                    }}
+                  >
+                    {children}
+                  </td>
                 ),
               }}
             >
