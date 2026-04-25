@@ -32,6 +32,12 @@ QUESTION_TYPE_CONFIG = {
         "option_keys": ["A", "B", "C", "D"],
         "instruction": "题型必须是单选题，question_type 固定为 single_choice；options 必须完整包含 A/B/C/D 四个选项，correct_answer 只能有一个，且必须是 A/B/C/D 中的一个。",
     },
+    "multiple_choice": {
+        "label": "多选题",
+        "option_keys": ["A", "B", "C", "D"],
+        "min_answers": 2,
+        "instruction": "题型必须是多选题，question_type 固定为 multiple_choice；options 必须完整包含 A/B/C/D 四个选项；correct_answer 必须包含至少两个正确选项，使用逗号分隔，例如 \"A,C\"。",
+    },
     "yes_no": {
         "label": "是非题",
         "option_keys": ["A", "B"],
@@ -61,9 +67,25 @@ def _normalize_question_type(question_type: Optional[str]) -> str:
     normalized = str(question_type or DEFAULT_QUESTION_TYPE).strip().lower()
     if normalized not in QUESTION_TYPE_CONFIG:
         raise QuestionBankGeneratorInputError(
-            "question_type 仅支持 single_choice、yes_no 或 true_false"
+            "question_type 仅支持 single_choice、multiple_choice、yes_no 或 true_false"
         )
     return normalized
+
+
+def _normalize_answer_keys(value: Any) -> List[str]:
+    if isinstance(value, list):
+        raw_parts = value
+    else:
+        text = str(value or "").strip().upper()
+        parts = [part for part in re.split(r"[\s,，;；/、|]+", text) if part]
+        raw_parts = list(parts[0]) if len(parts) == 1 and re.fullmatch(r"[A-Z]+", parts[0]) else parts
+
+    answer_keys: List[str] = []
+    for part in raw_parts:
+        key = str(part or "").strip().upper()
+        if re.fullmatch(r"[A-Z]", key) and key not in answer_keys:
+            answer_keys.append(key)
+    return answer_keys
 
 
 class QuestionBankGenerator:
@@ -389,12 +411,25 @@ class QuestionBankGenerator:
                 item.get("question_type") or normalized_question_type
             )
             options = self._normalize_options(item.get("options"), index, question_type)
-            correct_answer = str(item.get("correct_answer", "")).strip().upper()[:1]
-            if correct_answer not in QUESTION_TYPE_CONFIG[question_type]["option_keys"]:
+            answer_keys = _normalize_answer_keys(item.get("correct_answer", ""))
+            option_keys = QUESTION_TYPE_CONFIG[question_type]["option_keys"]
+            invalid_answers = [key for key in answer_keys if key not in option_keys]
+            min_answers = int(QUESTION_TYPE_CONFIG[question_type].get("min_answers", 1))
+            if question_type == "multiple_choice":
+                if len(answer_keys) < min_answers or invalid_answers:
+                    raise QuestionBankGeneratorLLMError(
+                        f"第 {index} 题的 correct_answer 必须至少包含 {min_answers} 个答案，且只能从 "
+                        + "/".join(option_keys)
+                        + " 中选择"
+                    )
+                correct_answer = ",".join(answer_keys)
+            elif len(answer_keys) != 1 or invalid_answers:
                 raise QuestionBankGeneratorLLMError(
                     f"第 {index} 题的 correct_answer 必须是 "
-                    + "/".join(QUESTION_TYPE_CONFIG[question_type]["option_keys"])
+                    + "/".join(option_keys)
                 )
+            else:
+                correct_answer = answer_keys[0]
 
             difficulty = item.get("difficulty", 3)
             try:

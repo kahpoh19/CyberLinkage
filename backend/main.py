@@ -51,13 +51,21 @@ def ensure_learning_columns():
 
     with engine.begin() as conn:
         if "exercises" in tables:
-            columns = {col["name"] for col in inspector.get_columns("exercises")}
+            exercise_columns = {col["name"]: col for col in inspector.get_columns("exercises")}
+            columns = set(exercise_columns)
             if "course" not in columns:
                 conn.execute(text("ALTER TABLE exercises ADD COLUMN course VARCHAR(50)"))
                 conn.execute(text("UPDATE exercises SET course = 'c_language' WHERE course IS NULL"))
             if "question_type" not in columns:
                 conn.execute(text("ALTER TABLE exercises ADD COLUMN question_type VARCHAR(20) DEFAULT 'single_choice'"))
                 conn.execute(text("UPDATE exercises SET question_type = 'single_choice' WHERE question_type IS NULL"))
+            correct_answer_type = exercise_columns.get("correct_answer", {}).get("type")
+            correct_answer_length = getattr(correct_answer_type, "length", None)
+            if correct_answer_length is not None and correct_answer_length < 20:
+                if engine.dialect.name in {"mysql", "mariadb"}:
+                    conn.execute(text("ALTER TABLE exercises MODIFY COLUMN correct_answer VARCHAR(20) NOT NULL"))
+                elif engine.dialect.name == "postgresql":
+                    conn.execute(text("ALTER TABLE exercises ALTER COLUMN correct_answer TYPE VARCHAR(20)"))
 
         if "practice_records" in tables:
             columns = {col["name"] for col in inspector.get_columns("practice_records")}

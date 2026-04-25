@@ -41,6 +41,12 @@ def build_parser():
         help="每个知识点生成多少道题，默认 3",
     )
     parser.add_argument(
+        "--question-type",
+        choices=["single_choice", "multiple_choice", "yes_no", "true_false"],
+        default="single_choice",
+        help="题型：single_choice 单选，multiple_choice 多选，yes_no 是非，true_false 判断",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -75,6 +81,7 @@ async def main():
             knowledge_point_ids=args.knowledge_point_ids,
             questions_per_point=args.questions_per_point,
             max_points=args.limit,
+            question_type=args.question_type,
         )
     except (QuestionBankGeneratorError, ValueError) as exc:
         print(f"❌ 生成失败：{exc}")

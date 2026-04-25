@@ -37,6 +37,7 @@ const TEXTAREA_STYLE = {
 
 const QUESTION_TYPE_OPTIONS = [
   { value: 'single_choice', label: '单选题' },
+  { value: 'multiple_choice', label: '多选题' },
   { value: 'yes_no', label: '是非题' },
   { value: 'true_false', label: '判断题' },
 ]
@@ -75,18 +76,45 @@ const getQuestionTypeLabel = type =>
 
 const normalizeQuestionType = type => {
   const normalized = String(type || '').trim()
-  return ['single_choice', 'yes_no', 'true_false'].includes(normalized)
+  return ['single_choice', 'multiple_choice', 'yes_no', 'true_false'].includes(normalized)
     ? normalized
     : 'single_choice'
 }
 
 const getQuestionOptionKeys = questionType =>
-  normalizeQuestionType(questionType) === 'single_choice'
+  ['single_choice', 'multiple_choice'].includes(normalizeQuestionType(questionType))
     ? ['A', 'B', 'C', 'D']
     : ['A', 'B']
 
 const isFixedYesNoQuestion = questionType =>
   normalizeQuestionType(questionType) === 'yes_no'
+
+const isMultipleChoiceQuestion = questionType =>
+  normalizeQuestionType(questionType) === 'multiple_choice'
+
+const normalizeCorrectAnswer = (questionType, value) => {
+  const optionKeys = getQuestionOptionKeys(questionType)
+  const rawParts = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .toUpperCase()
+      .replace(/[^A-Z]+/g, ',')
+      .split(',')
+  const answerKeys = []
+
+  rawParts.forEach(part => {
+    const text = String(part || '').trim().toUpperCase()
+    const keys = text.length > 1 && /^[A-Z]+$/.test(text) ? text.split('') : [text]
+    keys.forEach(key => {
+      if (optionKeys.includes(key) && !answerKeys.includes(key)) answerKeys.push(key)
+    })
+  })
+
+  if (isMultipleChoiceQuestion(questionType)) {
+    return answerKeys.join(',')
+  }
+  return answerKeys[0] || optionKeys[0]
+}
 
 function createQuestionOptions(
   questionType,
@@ -120,9 +148,7 @@ function createQuestionOptions(
 
 function createQuestionDraft(overrides = {}) {
   const questionType = normalizeQuestionType(overrides.question_type || overrides.questionType)
-  const optionKeys = getQuestionOptionKeys(questionType)
-  const correctAnswer = String(overrides.correct_answer || 'A').trim().toUpperCase()
-  const nextCorrectAnswer = optionKeys.includes(correctAnswer) ? correctAnswer : optionKeys[0]
+  const nextCorrectAnswer = normalizeCorrectAnswer(questionType, overrides.correct_answer || 'A')
   const difficulty = Number.parseInt(overrides.difficulty, 10)
 
   return {
@@ -143,7 +169,7 @@ function getSanitizedQuestionDraft(question) {
     knowledge_point_id: draft.knowledge_point_id.trim(),
     question_text: draft.question_text.trim(),
     options: createQuestionOptions(draft.question_type, draft.options, true),
-    correct_answer: String(draft.correct_answer || '').trim().toUpperCase(),
+    correct_answer: normalizeCorrectAnswer(draft.question_type, draft.correct_answer),
     explanation: draft.explanation.trim(),
   }
 }
@@ -161,7 +187,14 @@ function validateQuestionDraft(question) {
     }
   }
 
-  if (!optionKeys.includes(draft.correct_answer)) {
+  const answerKeys = normalizeCorrectAnswer(draft.question_type, draft.correct_answer)
+    .split(',')
+    .filter(Boolean)
+  if (isMultipleChoiceQuestion(draft.question_type)) {
+    if (answerKeys.length < 2) {
+      return '多选题的正确答案至少需要选择两个选项'
+    }
+  } else if (answerKeys.length !== 1 || !optionKeys.includes(answerKeys[0])) {
     return `正确答案必须是 ${optionKeys.join('/')} 之一`
   }
 
@@ -383,7 +416,8 @@ function QuestionPreviewCard({ item, index }) {
 
       <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
         {Object.entries(item.options || {}).map(([key, value]) => {
-          const isAnswer = key === item.correct_answer
+          const answerKeys = normalizeCorrectAnswer(item.question_type, item.correct_answer).split(',').filter(Boolean)
+          const isAnswer = answerKeys.includes(key)
           return (
             <div
               key={key}
@@ -469,13 +503,10 @@ function QuestionEditorFields({
             value={question.question_type}
             onChange={value => {
               const nextType = normalizeQuestionType(value)
-              const nextOptionKeys = getQuestionOptionKeys(nextType)
               updateDraft({
                 question_type: nextType,
                 options: createQuestionOptions(nextType, question.options, false, question.question_type),
-                correct_answer: nextOptionKeys.includes(question.correct_answer)
-                  ? question.correct_answer
-                  : nextOptionKeys[0],
+                correct_answer: normalizeCorrectAnswer(nextType, question.correct_answer),
               })
             }}
             options={QUESTION_TYPE_OPTIONS}
@@ -555,8 +586,13 @@ function QuestionEditorFields({
           <label style={FIELD_LABEL_STYLE}>正确答案</label>
           <Select
             disabled={disabled}
-            value={question.correct_answer}
-            onChange={value => updateDraft({ correct_answer: value })}
+            mode={isMultipleChoiceQuestion(question.question_type) ? 'multiple' : undefined}
+            value={isMultipleChoiceQuestion(question.question_type)
+              ? normalizeCorrectAnswer(question.question_type, question.correct_answer).split(',').filter(Boolean)
+              : normalizeCorrectAnswer(question.question_type, question.correct_answer)}
+            onChange={value => updateDraft({
+              correct_answer: normalizeCorrectAnswer(question.question_type, value),
+            })}
             options={optionKeys.map(key => ({ value: key, label: `${key} 选项` }))}
             style={{ width: '100%' }}
           />

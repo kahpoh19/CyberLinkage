@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
-  Card, Button, Radio, Space, Progress, Spin, Tag, Typography, message,
+  Card, Button, Radio, Checkbox, Space, Progress, Spin, Tag, Typography, message,
 } from 'antd'
 import CheckCircleOutlined from '@ant-design/icons/es/icons/CheckCircleOutlined'
 import CloseCircleOutlined from '@ant-design/icons/es/icons/CloseCircleOutlined'
@@ -14,6 +14,21 @@ import { startDiagnosis, submitDiagnosis } from '../api'
 import useUserStore from '../store/userStore'
 
 const { Title, Text, Paragraph } = Typography
+
+const normalizeAnswer = (answer, questionType = 'single_choice') => {
+  const text = Array.isArray(answer) ? answer.join(',') : String(answer || '')
+  if (questionType === 'multiple_choice') {
+    return Array.from(new Set(
+      text
+        .toUpperCase()
+        .replace(/[^A-Z]+/g, ',')
+        .split(',')
+        .flatMap(part => (/^[A-Z]+$/.test(part) ? part.split('') : [part]))
+        .filter(Boolean),
+    )).sort().join(',')
+  }
+  return text.trim().toUpperCase().slice(0, 1)
+}
 
 function DiffBadge({ difficulty }) {
   const color = difficulty <= 2 ? 'success' : difficulty <= 3 ? 'warning' : 'error'
@@ -31,6 +46,42 @@ function QuestionCard({ exercise, answer, onAnswer, index, total, isDark, isMobi
   const optionBorder = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'
   const optionBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.015)'
   const selectedBg = isDark ? 'rgba(22,119,255,0.18)' : 'rgba(22,119,255,0.05)'
+  const isMultiple = exercise?.question_type === 'multiple_choice'
+  const selectedAnswers = normalizeAnswer(answer, exercise?.question_type).split(',').filter(Boolean)
+
+  const optionList = (
+    <Space direction="vertical" style={{ width: '100%', gap: 10 }}>
+      {Object.entries(options).map(([key, value]) => {
+        const selected = isMultiple ? selectedAnswers.includes(key) : answer === key
+        const Control = isMultiple ? Checkbox : Radio
+        return (
+          <Control
+            key={key}
+            value={key}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              padding: '12px 16px',
+              borderRadius: 10,
+              border: `1.5px solid ${selected ? '#1677ff' : optionBorder}`,
+              background: selected ? selectedBg : optionBg,
+              transition: 'all 0.18s ease',
+              cursor: 'pointer',
+              margin: 0,
+              width: '100%',
+            }}
+          >
+            <span style={{ color: optionColor }}>
+              <Text strong style={{ color: selected ? '#1677ff' : optionMutedColor, marginRight: 8 }}>
+                {key}.
+              </Text>
+              {value}
+            </span>
+          </Control>
+        )
+      })}
+    </Space>
+  )
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -76,42 +127,23 @@ function QuestionCard({ exercise, answer, onAnswer, index, total, isDark, isMobi
           {exercise.question_text}
         </div>
 
-        <Radio.Group
-          value={answer}
-          onChange={(e) => onAnswer(exercise.id, e.target.value)}
-          style={{ width: '100%' }}
-        >
-          <Space direction="vertical" style={{ width: '100%', gap: 10 }}>
-            {Object.entries(options).map(([key, value]) => {
-              const selected = answer === key
-              return (
-                <Radio
-                  key={key}
-                  value={key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    padding: '12px 16px',
-                    borderRadius: 10,
-                    border: `1.5px solid ${selected ? '#1677ff' : optionBorder}`,
-                    background: selected ? selectedBg : optionBg,
-                    transition: 'all 0.18s ease',
-                    cursor: 'pointer',
-                    margin: 0,
-                    width: '100%',
-                  }}
-                >
-                  <span style={{ color: optionColor }}>
-                    <Text strong style={{ color: selected ? '#1677ff' : optionMutedColor, marginRight: 8 }}>
-                      {key}.
-                    </Text>
-                    {value}
-                  </span>
-                </Radio>
-              )
-            })}
-          </Space>
-        </Radio.Group>
+        {isMultiple ? (
+          <Checkbox.Group
+            value={selectedAnswers}
+            onChange={(values) => onAnswer(exercise.id, normalizeAnswer(values, exercise.question_type))}
+            style={{ width: '100%' }}
+          >
+            {optionList}
+          </Checkbox.Group>
+        ) : (
+          <Radio.Group
+            value={answer}
+            onChange={(e) => onAnswer(exercise.id, e.target.value)}
+            style={{ width: '100%' }}
+          >
+            {optionList}
+          </Radio.Group>
+        )}
       </Card>
     </div>
   )
@@ -119,7 +151,9 @@ function QuestionCard({ exercise, answer, onAnswer, index, total, isDark, isMobi
 
 function ReviewCard({ exercise, userAnswer, index, isDark, isMobile }) {
   const correct = exercise.correct_answer
-  const isCorrect = userAnswer?.toUpperCase() === correct?.toUpperCase()
+  const correctKeys = normalizeAnswer(correct, exercise.question_type).split(',').filter(Boolean)
+  const userKeys = normalizeAnswer(userAnswer, exercise.question_type).split(',').filter(Boolean)
+  const isCorrect = normalizeAnswer(userAnswer, exercise.question_type) === normalizeAnswer(correct, exercise.question_type)
   const options = exercise?.options || {}
   const skipped = !userAnswer
   const neutralText = isDark ? '#d9d9d9' : '#444'
@@ -157,8 +191,8 @@ function ReviewCard({ exercise, userAnswer, index, isDark, isMobile }) {
 
       <div style={{ marginBottom: skipped || isCorrect ? 0 : 12 }}>
         {Object.entries(options).map(([key, value]) => {
-          const isCorrectOpt = key === correct
-          const isUserOpt = key === userAnswer
+          const isCorrectOpt = correctKeys.includes(key)
+          const isUserOpt = userKeys.includes(key)
 
           let bg = 'transparent'
           let border = defaultOptionBorder
@@ -374,7 +408,15 @@ export default function Diagnosis() {
   }
 
   const handleAnswer = (exerciseId, answer) => {
-    setAnswers((prev) => ({ ...prev, [exerciseId]: answer }))
+    setAnswers((prev) => {
+      const next = { ...prev }
+      if (answer) {
+        next[exerciseId] = answer
+      } else {
+        delete next[exerciseId]
+      }
+      return next
+    })
   }
 
   const handleNext = () => {
@@ -667,11 +709,11 @@ export default function Diagnosis() {
 
     const wrongExercises = exList.filter((e) => {
       const userAns = ans[e.id]
-      return !userAns || userAns.toUpperCase() !== e.correct_answer?.toUpperCase()
+      return !userAns || normalizeAnswer(userAns, e.question_type) !== normalizeAnswer(e.correct_answer, e.question_type)
     })
     const correctExercises = exList.filter((e) => {
       const userAns = ans[e.id]
-      return userAns && userAns.toUpperCase() === e.correct_answer?.toUpperCase()
+      return userAns && normalizeAnswer(userAns, e.question_type) === normalizeAnswer(e.correct_answer, e.question_type)
     })
 
     return (

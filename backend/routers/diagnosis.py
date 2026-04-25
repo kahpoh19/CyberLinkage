@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/diagnosis", tags=["诊断测评"])
 class ExerciseOut(BaseModel):
     id: int
     knowledge_point_id: str
+    question_type: str = "single_choice"
     question_text: str
     options: Dict[str, str]
     difficulty: int
@@ -57,6 +58,20 @@ class DiagnosisResult(BaseModel):
     mastery_map: Dict[str, float]
     weak_points: List[str]
     exercises: List[ExerciseReviewOut] = Field(default_factory=list)
+
+
+def _normalize_answer(answer: str, question_type: str = "single_choice") -> str:
+    text = str(answer or "").strip().upper()
+    if question_type == "multiple_choice":
+        keys = []
+        for key in text.replace("，", ",").replace("、", ",").replace(";", ",").split(","):
+            key = key.strip()
+            if len(key) == 1 and key.isalpha() and key not in keys:
+                keys.append(key)
+        if not keys and text.isalpha():
+            keys = list(dict.fromkeys(text))
+        return ",".join(sorted(keys))
+    return text[:1]
 
 
 @router.get("/start", response_model=List[ExerciseOut])
@@ -161,7 +176,10 @@ def submit_diagnosis(
             continue
 
         review_exercises.append(exercise)
-        is_correct = item.answer.upper() == exercise.correct_answer.upper()
+        is_correct = (
+            _normalize_answer(item.answer, exercise.question_type)
+            == _normalize_answer(exercise.correct_answer, exercise.question_type)
+        )
         if is_correct:
             correct_count += 1
 

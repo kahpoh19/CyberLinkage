@@ -71,6 +71,7 @@ def import_exercises(db_path=None, json_path=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             course TEXT NOT NULL,
             knowledge_point_id TEXT NOT NULL,
+            question_type TEXT DEFAULT 'single_choice',
             question_text TEXT NOT NULL,
             options TEXT NOT NULL,
             correct_answer TEXT NOT NULL,
@@ -84,6 +85,9 @@ def import_exercises(db_path=None, json_path=None):
     if "course" not in existing_columns:
         cursor.execute("ALTER TABLE exercises ADD COLUMN course TEXT")
         cursor.execute("UPDATE exercises SET course = 'c_language' WHERE course IS NULL")
+    if "question_type" not in existing_columns:
+        cursor.execute("ALTER TABLE exercises ADD COLUMN question_type TEXT DEFAULT 'single_choice'")
+        cursor.execute("UPDATE exercises SET question_type = 'single_choice' WHERE question_type IS NULL")
 
     cursor.execute("SELECT COUNT(*) FROM exercises WHERE course = ?", (course,))
     existing = cursor.fetchone()[0]
@@ -102,11 +106,12 @@ def import_exercises(db_path=None, json_path=None):
     imported = 0
     for ex in exercises:
         cursor.execute("""
-            INSERT INTO exercises (course, knowledge_point_id, question_text, options, correct_answer, difficulty, explanation)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO exercises (course, knowledge_point_id, question_type, question_text, options, correct_answer, difficulty, explanation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             course,
             ex["knowledge_point_id"],
+            ex.get("question_type", "single_choice"),
             ex["question_text"],
             json.dumps(ex["options"], ensure_ascii=False),
             ex["correct_answer"],

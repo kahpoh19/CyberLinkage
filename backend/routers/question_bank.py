@@ -1,6 +1,7 @@
 """AI 题库生成路由。"""
 
 import os
+import re
 import sys
 from functools import lru_cache
 from typing import Dict, List, Optional
@@ -23,6 +24,11 @@ QUESTION_TYPE_CONFIG = {
         "label": "单选题",
         "option_keys": ["A", "B", "C", "D"],
     },
+    "multiple_choice": {
+        "label": "多选题",
+        "option_keys": ["A", "B", "C", "D"],
+        "min_answers": 2,
+    },
     "yes_no": {
         "label": "是非题",
         "option_keys": ["A", "B"],
@@ -41,8 +47,24 @@ QUESTION_TYPE_CONFIG = {
 def _normalize_question_type(value: Optional[str]) -> str:
     normalized = str(value or DEFAULT_QUESTION_TYPE).strip().lower()
     if normalized not in QUESTION_TYPE_CONFIG:
-        raise ValueError("question_type 仅支持 single_choice、yes_no 或 true_false")
+        raise ValueError("question_type 仅支持 single_choice、multiple_choice、yes_no 或 true_false")
     return normalized
+
+
+def _normalize_answer_keys(value: object) -> List[str]:
+    if isinstance(value, list):
+        raw_parts = value
+    else:
+        text = str(value or "").strip().upper()
+        parts = [part for part in re.split(r"[\s,，;；/、|]+", text) if part]
+        raw_parts = list(parts[0]) if len(parts) == 1 and re.fullmatch(r"[A-Z]+", parts[0]) else parts
+
+    answer_keys: List[str] = []
+    for part in raw_parts:
+        key = str(part or "").strip().upper()
+        if re.fullmatch(r"[A-Z]", key) and key not in answer_keys:
+            answer_keys.append(key)
+    return answer_keys
 
 
 def _ensure_project_root_on_path():
@@ -86,7 +108,9 @@ class GeneratedQuestionOut(BaseModel):
     @field_validator("correct_answer", mode="before")
     @classmethod
     def normalize_correct_answer(cls, value):
-        return str(value or "").strip().upper()[:1]
+        if isinstance(value, list):
+            return ",".join(str(item or "").strip().upper() for item in value)
+        return str(value or "").strip().upper()
 
     @field_validator("difficulty", mode="before")
     @classmethod
@@ -136,12 +160,24 @@ class GeneratedQuestionOut(BaseModel):
                 f"{type_config['label']}的 options 必须完整包含 "
                 + "/".join(option_keys)
             )
-        if self.correct_answer not in option_keys:
+        answer_keys = _normalize_answer_keys(self.correct_answer)
+        invalid_answers = [key for key in answer_keys if key not in option_keys]
+        min_answers = int(type_config.get("min_answers", 1))
+
+        if self.question_type == "multiple_choice":
+            if len(answer_keys) < min_answers or invalid_answers:
+                raise ValueError(
+                    f"{type_config['label']}的 correct_answer 必须至少包含 {min_answers} 个答案，且只能从 "
+                    + "/".join(option_keys)
+                    + " 中选择"
+                )
+        elif len(answer_keys) != 1 or invalid_answers:
             raise ValueError(
                 f"{type_config['label']}的 correct_answer 必须是 "
                 + "/".join(option_keys)
             )
 
+        self.correct_answer = ",".join(answer_keys) if self.question_type == "multiple_choice" else answer_keys[0]
         self.options = option_map
         return self
 
