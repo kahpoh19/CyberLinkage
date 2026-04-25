@@ -256,7 +256,7 @@ export default function KnowledgeGraph() {
         <Tag color="#52c41a">🟢 已掌握</Tag>
         <Tag color="#999">⚪ 未测试</Tag>
         <span style={{ marginLeft: 16, fontSize: 12, color: pageHintColor }}>
-          💡 拖动画布 / 滚轮缩放，点击知识点查看详情与资料
+          💡 拖动画布 / 滚轮缩放，树图左键展开，右键查看详情与资料
         </span>
       </div>
 

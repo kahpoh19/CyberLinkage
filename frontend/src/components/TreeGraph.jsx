@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useCallback, useState } from 'react'
+import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react'
 import ReactECharts from 'echarts-for-react/esm/core'
 import useUserStore from '../store/userStore'
 import { buildTreeData, getMasteryTokens } from '../utils/graphUtils'
@@ -36,7 +36,7 @@ export default function TreeGraph({ graphData, onNodeClick }) {
           `<b style="color:${tokens.bg}">${d.name}</b>`,
           `掌握度：<span style="color:${tokens.bg};font-weight:600">${mStr}</span>`,
           `难度：${'⭐'.repeat(d._raw.difficulty || 3)}`,
-          `<span style="color:${isDark ? '#bfbfbf' : '#666'}">点击查看详情</span>`,
+          `<span style="color:${isDark ? '#bfbfbf' : '#666'}">右键查看详情</span>`,
         ].join('<br/>')
       },
     },
@@ -87,7 +87,21 @@ export default function TreeGraph({ graphData, onNodeClick }) {
     }],
   }), [treeData, isDark, theme])
 
-  const handleClick = useCallback((params) => {
+  useEffect(() => {
+    const chart = chartRef.current?.getEchartsInstance()
+    const dom = chart?.getDom()
+    if (!dom) return undefined
+
+    const preventBrowserMenu = (event) => {
+      event.preventDefault()
+    }
+
+    dom.addEventListener('contextmenu', preventBrowserMenu)
+    return () => dom.removeEventListener('contextmenu', preventBrowserMenu)
+  }, [])
+
+  const handleContextMenu = useCallback((params) => {
+    params?.event?.event?.preventDefault?.()
     if (params?.data?._raw) {
       onNodeClick?.(params.data._raw)
     }
@@ -111,7 +125,7 @@ export default function TreeGraph({ graphData, onNodeClick }) {
         ref={chartRef}
         option={option}
         style={{ width: '100%', height: '100%' }}
-        onEvents={{ click: handleClick }}
+        onEvents={{ contextmenu: handleContextMenu }}
         notMerge={true}
       />
     </div>
